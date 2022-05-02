@@ -7,4 +7,10 @@ module FlatZinc
 
 import MathOptInterface
 
+function run(binary, filename, args = String[])
+    args = copy(args)
+    push!(args, filename)
+    return String(read(`$binary $args`))
+end
+
 end # module
