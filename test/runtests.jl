@@ -132,6 +132,50 @@ function test_moi_one_solution_fzn()
     return
 end
 
+function test_moi_int_lin()
+    model = MOI.Utilities.Model{Int}()
+    x = MOI.add_variables(model, 3)
+    MOI.add_constraint.(model, x, MOI.Integer())
+    for i in 1:3
+        MOI.add_constraint(model, 2 * x[i], MOI.GreaterThan(0))
+        MOI.add_constraint(model, 1 * x[i], MOI.LessThan(1))
+    end
+    MOI.add_constraint(model, sum(1 * x[i] for i in 1:3), MOI.EqualTo(2))
+    solver = FlatZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ResultCount()) >= 1
+    v = [MOI.get(solver, MOI.VariablePrimal(), index_map[xi]) for xi in x]
+    @test all(v .>= 0)
+    @test all(v .<= 1)
+    @test sum(v) == 2
+    return
+end
+
+function test_moi_all_different()
+    model = MOI.Utilities.Model{Int}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.add_constraint(model, x, MOI.Interval(1, 3))
+    y, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.add_constraint(model, y, MOI.Interval(1, 3))
+    z, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.add_constraint(model, z, MOI.Interval(1, 3))
+    MOI.add_constraint(
+        model,
+        MOI.VectorOfVariables([x, y, z]),
+        MOI.AllDifferent(3),
+    )
+    solver = FlatZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ResultCount()) >= 1
+    v = [
+        MOI.get(solver, MOI.VariablePrimal(), index_map[xi]) for xi in [x, y, z]
+    ]
+    @test v[1] != v[2] && v[2] != v[3] && v[1] != v[3]
+    return
+end
+
 end
 
 TestFlatZinc.runtests()
