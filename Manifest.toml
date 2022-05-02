@@ -178,7 +178,7 @@ uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 
 [[MathOptInterface]]
 deps = ["BenchmarkTools", "CodecBzip2", "CodecZlib", "ForwardDiff", "JSON", "LinearAlgebra", "MutableArithmetics", "NaNMath", "OrderedCollections", "Printf", "SparseArrays", "SpecialFunctions", "Test", "Unicode"]
-git-tree-sha1 = "e1a97cd4f6a5170bd518526db7f19a2e4bc2f84e"
+git-tree-sha1 = "aedd44afb4a445e1d7a83a68adaa542a8cf03ebf"
 repo-rev = "od/cpsat-countgt"
 repo-url = "https://github.com/jump-dev/MathOptInterface.jl.git"
 uuid = "b8f27783-ece8-5eb3-8dc8-9495eed66fee"

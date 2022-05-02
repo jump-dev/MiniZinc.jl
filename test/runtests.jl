@@ -79,7 +79,7 @@ function test_chuffed_asset_einstein()
     return
 end
 
-function test_basic_fzn()
+function test_moi_basic_fzn()
     model = MOI.Utilities.Model{Int}()
     x, x_int = MOI.add_constrained_variable(model, MOI.Integer())
     c1 = MOI.add_constraint(model, x, MOI.GreaterThan(1))
@@ -90,15 +90,13 @@ function test_basic_fzn()
     @test MOI.is_valid(model, c2)
     solver = FlatZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
     index_map, _ = MOI.optimize!(solver, model)
-    @test_broken MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
-    @test_broken MOI.get(solver, MOI.ResultCount()) >= 1
-    @test_broken(
-        MOI.get(solver, MOI.VariablePrimal(), index_map[x]) in [1, 2, 3]
-    )
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ResultCount()) >= 1
+    @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) in [1, 2, 3]
     return
 end
 
-function test_infeasible_fzn()
+function test_moi_infeasible_fzn()
     model = MOI.Utilities.Model{Int}()
     x, x_int = MOI.add_constrained_variable(model, MOI.Integer())
     c1 = MOI.add_constraint(model, x, MOI.GreaterThan(5))
@@ -109,8 +107,28 @@ function test_infeasible_fzn()
     @test MOI.is_valid(model, c2)
     solver = FlatZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
     _, _ = MOI.optimize!(solver, model)
-    @test_broken MOI.get(solver, MOI.TerminationStatus()) === MOI.INFEASIBLE
-    @test_broken MOI.get(solver, MOI.ResultCount()) == 0
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OTHER_ERROR
+    @test MOI.get(solver, MOI.ResultCount()) == 0
+    return
+end
+
+function test_moi_one_solution_fzn()
+    model = MOI.Utilities.Model{Int}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.add_constraint(model, x, MOI.Interval(1, 10))
+    MOI.set(model, MOI.ObjectiveFunction{typeof(x)}(), x)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    solver = FlatZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ResultCount()) >= 1
+    @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) == 10
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+    solver = FlatZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ResultCount()) >= 1
+    @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) == 1
     return
 end
 
