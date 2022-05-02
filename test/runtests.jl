@@ -25,7 +25,7 @@ end
 
 function _test_chuffed_asset(file, args...)
     filename = joinpath(@__DIR__, "assets", file)
-    ret = FlatZinc.run(Chuffed_jll.fznchuffed(), filename, args...)
+    ret = FlatZinc.run(Chuffed_jll.fznchuffed, filename, args...)
     return replace(ret, "\r\n" => "\n")
 end
 
@@ -73,6 +73,52 @@ function test_chuffed_asset_einstein()
           "s = array1d(1..5, [3, 5, 2, 1, 4]);\n" *
           "\n" *
           "----------\n"
+    return
+end
+
+function TODO_test_basic_fzn()
+    model = FlatZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
+    @test MOI.supports_add_constrained_variable(model, MOI.Integer)
+    @test MOI.supports_constraint(
+        model,
+        OI.ScalarAffineFunction{Int},
+        MOI.LessThan{Int},
+    )
+    # x ∈ {1, 2, 3}
+    x, x_int = MOI.add_constrained_variable(model, MOI.Integer())
+    c1 = MOI.add_constraint(model, -1 * x, MOI.LessThan(-1))
+    c2 = MOI.add_constraint(model, 1 * x, MOI.LessThan(3))
+    @test MOI.is_valid(model, x)
+    @test MOI.is_valid(model, x_int)
+    @test MOI.is_valid(model, c1)
+    @test MOI.is_valid(model, c2)
+    MOI.optimize!(model)
+    @test MOI.get(model, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(model, MOI.ResultCount()) >= 1
+    @test MOI.get(model, MOI.VariablePrimal(), x) ∈ Set([1, 2, 3])
+    @test MOI.get(model, MOI.VariablePrimal(1), x) ∈ Set([1, 2, 3])
+    return
+end
+
+function TODO_test_infeasible_fzn()
+    model = FlatZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
+    @test MOI.supports_add_constrained_variable(model, MOI.Integer)
+    @test MOI.supports_constraint(
+        model,
+        MOI.ScalarAffineFunction{Int},
+        MOI.LessThan{Int},
+    )
+    # x ∈ ∅
+    x, x_int = MOI.add_constrained_variable(model, MOI.Integer())
+    c1 = MOI.add_constraint(model, -1 * x, MOI.LessThan(-5))
+    c2 = MOI.add_constraint(model, 1 * x, MOI.LessThan(3))
+    @test MOI.is_valid(model, x)
+    @test MOI.is_valid(model, x_int)
+    @test MOI.is_valid(model, c1)
+    @test MOI.is_valid(model, c2)
+    MOI.optimize!(model)
+    @test MOI.get(model, MOI.TerminationStatus()) === MOI.INFEASIBLE
+    @test MOI.get(model, MOI.ResultCount()) == 0
     return
 end
 
