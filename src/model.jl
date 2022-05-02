@@ -4,13 +4,13 @@
 # Use of this source code is governed by an MIT-style license that can be found
 # in the LICENSE.md file or at https://opensource.org/licenses/MIT.
 
-mutable struct VariableInfo
+mutable struct _VariableInfo
     index::MOI.VariableIndex
     name::String
     set::MOI.AbstractSet
 end
 
-mutable struct ConstraintInfo
+mutable struct _ConstraintInfo
     index::MOI.ConstraintIndex
     # FlatZinc does not allow constraint names.
     f::MOI.AbstractFunction
@@ -20,15 +20,15 @@ end
 
 mutable struct Model <: MOI.AbstractOptimizer
     # A mapping from the MOI.VariableIndex to the variable object.
-    # VariableInfo also stores some additional fields like the type of variable.
-    variable_info::CleverDicts.CleverDict{MOI.VariableIndex,VariableInfo}
+    # _VariableInfo also stores some additional fields like the type of variable.
+    variable_info::CleverDicts.CleverDict{MOI.VariableIndex,_VariableInfo}
 
     # A mapping from the MOI.ConstraintIndex to the variable object.
-    # ConstraintInfo also stores some additional fields like the type of
+    # _ConstraintInfo also stores some additional fields like the type of
     # constraint. Deletion of constraints is not supported (having a vector
     # ensures that the order in which constraints are added is respected when
     # outputting the model, which makes testing easier).
-    constraint_info::Vector{ConstraintInfo}
+    constraint_info::Vector{_ConstraintInfo}
 
     # For FlatZinc-level sets/arrays, map the constraints that are defined on
     # sets/arrays to the assigned name of the set/array. This structure is
@@ -52,39 +52,28 @@ mutable struct Model <: MOI.AbstractOptimizer
     function Model()
         model = new()
         model.variable_info =
-            CleverDicts.CleverDict{MOI.VariableIndex,VariableInfo}()
-        model.constraint_info = ConstraintInfo[]
-
+            CleverDicts.CleverDict{MOI.VariableIndex,_VariableInfo}()
+        model.constraint_info = _ConstraintInfo[]
         model.objective_sense = MOI.FEASIBILITY_SENSE
         model.objective_function = nothing
-
         model.sets_id = Dict{MOI.ConstraintIndex,String}()
         model.arrs_id = Dict{MOI.ConstraintIndex,String}()
-
         model.name_to_var = Dict{String,MOI.VariableIndex}()
-
         MOI.empty!(model)
         return model
     end
 end
 
-function Base.show(io::IO, ::Model)
-    print(io, "A FlatZinc (fzn) model")
-    return
-end
+Base.show(io::IO, ::Model) = print(io, "A FlatZinc (fzn) model")
 
 function MOI.empty!(model::Model)
     empty!(model.variable_info)
     empty!(model.constraint_info)
-
     model.objective_sense = MOI.FEASIBILITY_SENSE
     model.objective_function = nothing
-
     model.sets_id = Dict{MOI.ConstraintIndex,String}()
     model.arrs_id = Dict{MOI.ConstraintIndex,String}()
-
     model.name_to_var = Dict{String,MOI.VariableIndex}()
-
     return
 end
 
@@ -108,7 +97,7 @@ function MOI.set(
     f::MOI.VariableIndex,
 )
     model.objective_function = f
-    return nothing
+    return
 end
 
 function MOI.get(model::Model, ::MOI.ObjectiveSense)
@@ -117,7 +106,7 @@ end
 
 function MOI.set(model::Model, ::MOI.ObjectiveSense, s::MOI.OptimizationSense)
     model.objective_sense = s
-    return nothing
+    return
 end
 
 # Helpers.
@@ -128,7 +117,7 @@ function _create_variable(
 )
     index = CleverDicts.add_item(
         model.variable_info,
-        VariableInfo(MOI.VariableIndex(0), "", set),
+        _VariableInfo(MOI.VariableIndex(0), "", set),
     )
     model.variable_info[index].index = index
     return index
@@ -143,7 +132,7 @@ function _create_constraint(
     index = MOI.ConstraintIndex{F,S}(length(model.constraint_info) + 1)
     push!(
         model.constraint_info,
-        ConstraintInfo(index, f, set, as_part_of_variable),
+        _ConstraintInfo(index, f, set, as_part_of_variable),
     )
     return index
 end
@@ -170,13 +159,15 @@ function MOI.get(
     n::String,
 )::MOI.VariableIndex
     # TODO: test this.
-    # TODO: not terribly efficient, and used in FZN for parsing a solution (finding a variable by its name). Rather build a dict to retrieve the indices faster.
+    # TODO: not terribly efficient, and used in FZN for parsing a solution
+    # (finding a variable by its name). Rather build a dict to retrieve the
+    # indices faster.
     for i in keys(model.variable_info)
         if model.variable_info[i].name == n
             return i
         end
     end
-    return nothing
+    return
 end
 
 function MOI.set(
@@ -284,7 +275,7 @@ function MOI.add_constraint(
     s::S,
 ) where {F<:MOI.AbstractFunction,S<:MOI.AbstractSet}
     index = MOI.ConstraintIndex{F,S}(length(model.constraint_info) + 1)
-    push!(model.constraint_info, ConstraintInfo(index, f, s, false))
+    push!(model.constraint_info, _ConstraintInfo(index, f, s, false))
     return index
 end
 

@@ -162,12 +162,12 @@ end
 
 # Set printing.
 
-function write_set(::IO, ::Model, ::ConstraintInfo, ::MOI.AbstractSet)
+function write_set(::IO, ::Model, ::_ConstraintInfo, ::MOI.AbstractSet)
     # In general, nothing to do.
     return nothing
 end
 
-function write_set(io::IO, model::Model, con::ConstraintInfo, s::CP.Domain{Int})
+function write_set(io::IO, model::Model, con::_ConstraintInfo, s::CP.Domain{Int})
     set_name = "SET" * string(length(model.sets_id))
     model.sets_id[con.index] = set_name
     set_value = join(collect(s.values), ", ")
@@ -179,7 +179,7 @@ end
 
 # Array printing.
 
-function write_array(::IO, ::Model, ::ConstraintInfo, ::MOI.AbstractSet)
+function write_array(::IO, ::Model, ::_ConstraintInfo, ::MOI.AbstractSet)
     # In general, nothing to do.
     return nothing
 end
@@ -187,7 +187,7 @@ end
 function write_array(
     io::IO,
     model::Model,
-    con::ConstraintInfo,
+    con::_ConstraintInfo,
     s::CP.Element{Bool},
 )
     array_name = "ARRAY" * string(length(model.arrs_id))
@@ -208,7 +208,7 @@ end
 function write_array(
     io::IO,
     model::Model,
-    con::ConstraintInfo,
+    con::_ConstraintInfo,
     s::CP.Element{Int},
 )
     array_name = "ARRAY" * string(length(model.arrs_id))
@@ -227,7 +227,7 @@ end
 function write_array(
     io::IO,
     model::Model,
-    con::ConstraintInfo,
+    con::_ConstraintInfo,
     s::CP.Element{Float64},
 )
     array_name = "ARRAY" * string(length(model.arrs_id))

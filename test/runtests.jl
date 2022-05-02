@@ -3,6 +3,9 @@
 # Use of this source code is governed by an MIT-style license that can be found
 # in the LICENSE.md file or at https://opensource.org/licenses/MIT.
 
+import Pkg
+Pkg.pkg"add MathOptInterface#od/cpsat-countgt"
+
 module TestFlatZinc
 
 using Test
@@ -76,49 +79,38 @@ function test_chuffed_asset_einstein()
     return
 end
 
-function TODO_test_basic_fzn()
-    model = FlatZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
-    @test MOI.supports_add_constrained_variable(model, MOI.Integer)
-    @test MOI.supports_constraint(
-        model,
-        OI.ScalarAffineFunction{Int},
-        MOI.LessThan{Int},
-    )
-    # x ∈ {1, 2, 3}
+function test_basic_fzn()
+    model = MOI.Utilities.Model{Int}()
     x, x_int = MOI.add_constrained_variable(model, MOI.Integer())
-    c1 = MOI.add_constraint(model, -1 * x, MOI.LessThan(-1))
-    c2 = MOI.add_constraint(model, 1 * x, MOI.LessThan(3))
+    c1 = MOI.add_constraint(model, x, MOI.GreaterThan(1))
+    c2 = MOI.add_constraint(model, x, MOI.LessThan(3))
     @test MOI.is_valid(model, x)
     @test MOI.is_valid(model, x_int)
     @test MOI.is_valid(model, c1)
     @test MOI.is_valid(model, c2)
-    MOI.optimize!(model)
-    @test MOI.get(model, MOI.TerminationStatus()) === MOI.OPTIMAL
-    @test MOI.get(model, MOI.ResultCount()) >= 1
-    @test MOI.get(model, MOI.VariablePrimal(), x) ∈ Set([1, 2, 3])
-    @test MOI.get(model, MOI.VariablePrimal(1), x) ∈ Set([1, 2, 3])
+    solver = FlatZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
+    index_map, _ = MOI.optimize!(solver, model)
+    @test_broken MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test_broken MOI.get(solver, MOI.ResultCount()) >= 1
+    @test_broken(
+        MOI.get(solver, MOI.VariablePrimal(), index_map[x]) in [1, 2, 3]
+    )
     return
 end
 
-function TODO_test_infeasible_fzn()
-    model = FlatZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
-    @test MOI.supports_add_constrained_variable(model, MOI.Integer)
-    @test MOI.supports_constraint(
-        model,
-        MOI.ScalarAffineFunction{Int},
-        MOI.LessThan{Int},
-    )
-    # x ∈ ∅
+function test_infeasible_fzn()
+    model = MOI.Utilities.Model{Int}()
     x, x_int = MOI.add_constrained_variable(model, MOI.Integer())
-    c1 = MOI.add_constraint(model, -1 * x, MOI.LessThan(-5))
-    c2 = MOI.add_constraint(model, 1 * x, MOI.LessThan(3))
+    c1 = MOI.add_constraint(model, x, MOI.GreaterThan(5))
+    c2 = MOI.add_constraint(model, x, MOI.LessThan(3))
     @test MOI.is_valid(model, x)
     @test MOI.is_valid(model, x_int)
     @test MOI.is_valid(model, c1)
     @test MOI.is_valid(model, c2)
-    MOI.optimize!(model)
-    @test MOI.get(model, MOI.TerminationStatus()) === MOI.INFEASIBLE
-    @test MOI.get(model, MOI.ResultCount()) == 0
+    solver = FlatZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
+    _, _ = MOI.optimize!(solver, model)
+    @test_broken MOI.get(solver, MOI.TerminationStatus()) === MOI.INFEASIBLE
+    @test_broken MOI.get(solver, MOI.ResultCount()) == 0
     return
 end
 
