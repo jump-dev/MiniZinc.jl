@@ -167,7 +167,12 @@ function write_set(::IO, ::Model, ::_ConstraintInfo, ::MOI.AbstractSet)
     return nothing
 end
 
-function write_set(io::IO, model::Model, con::_ConstraintInfo, s::CP.Domain{Int})
+function write_set(
+    io::IO,
+    model::Model,
+    con::_ConstraintInfo,
+    s::CP.Domain{Int},
+)
     set_name = "SET" * string(length(model.sets_id))
     model.sets_id[con.index] = set_name
     set_value = join(collect(s.values), ", ")
