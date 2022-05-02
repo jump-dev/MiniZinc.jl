@@ -13,7 +13,7 @@ mutable struct _FznResults
     termination_status::MOI.TerminationStatusCode
     primal_status::MOI.ResultStatusCode
     objective_value::Real # TODO: implement this. Compute it from the solutions? Fzn doesn't really output it (unless the FZN file is tweaked).
-    primal_solutions::Vector{Dict{MOI.VariableIndex, Real}} # Solution ID -> (variable index -> value)
+    primal_solutions::Vector{Dict{MOI.VariableIndex,Real}} # Solution ID -> (variable index -> value)
 end
 
 function _FznResults()
@@ -22,7 +22,7 @@ function _FznResults()
         MOI.OPTIMIZE_NOT_CALLED,
         MOI.NO_SOLUTION,
         NaN,
-        Dict{MOI.VariableIndex, Float64}[],
+        Dict{MOI.VariableIndex,Float64}[],
     )
 end
 
@@ -44,8 +44,8 @@ mapping the name of the variables to their values (either a scalar or a vector
 of numbers). The values are automatically transformed into the closest type
 (integer or float).
 """
-function _parse_to_assignments(str::String)::Vector{Dict{String, Vector{Number}}}
-    results = Dict{String, Vector{Number}}[]
+function _parse_to_assignments(str::String)::Vector{Dict{String,Vector{Number}}}
+    results = Dict{String,Vector{Number}}[]
 
     # If the infeasibility marker is discovered, return an empty list.
     if occursin("=====UNSATISFIABLE=====", str)
@@ -57,12 +57,12 @@ function _parse_to_assignments(str::String)::Vector{Dict{String, Vector{Number}}
 
     # There may be several results returned by the solver. Each solution is
     # separated from the others by `'-' ^ 10`.
-    str_split = split(str, '-' ^ 10)[1:(end - 1)]
+    str_split = split(str, '-'^10)[1:(end-1)]
     n_results = length(str_split)
     sizehint!(results, n_results)
 
     for i in 1:n_results
-        push!(results, Dict{String, Vector{Number}}())
+        push!(results, Dict{String,Vector{Number}}())
 
         # Each value is indicated in its own statement, separated by a
         # semi-colon.
@@ -85,7 +85,8 @@ function _parse_to_assignments(str::String)::Vector{Dict{String, Vector{Number}}
                 # "array2d(1..2, 1..2, [1, 2, 3, 4])".
                 # TODO: should dimensions be preserved? (First argument[s] of arrayNd.)
                 val = split(split(val, '[')[2], ']')[1]
-                results[i][var] = map(_parse_fzn_value, map(strip, split(val, ',')))
+                results[i][var] =
+                    map(_parse_fzn_value, map(strip, split(val, ',')))
             end
         end
     end
@@ -143,8 +144,8 @@ Optimizer(Cmd(`/path/to/fzn.exe`, env=["PATH=/usr/bin"]))
 ```
 """
 function Optimizer(
-    solver_command::Union{String, Cmd}="",
-    solver_args::Vector{String}=String[],
+    solver_command::Union{String,Cmd} = "",
+    solver_args::Vector{String} = String[],
 )
     return Optimizer(
         CP.FlatZinc.Model(),
@@ -152,7 +153,6 @@ function Optimizer(
         0.0,
         true,
         solver_args,
-
         _FznResults(),
         NaN,
         NaN,
@@ -160,7 +160,9 @@ function Optimizer(
     )
 end
 
-Base.show(io::IO, ::Optimizer) = print(io, "A FlatZinc (flattened MiniZinc) model")
+function Base.show(io::IO, ::Optimizer)
+    return print(io, "A FlatZinc (flattened MiniZinc) model")
+end
 
 MOI.get(model::Optimizer, ::MOI.SolverName) = "FlatZincWriter"
 
@@ -168,15 +170,25 @@ function MOI.supports(model::Optimizer, attr::MOI.AnyAttribute, x...)
     return MOI.supports(model.inner, attr, x...)::Bool
 end
 
-function MOI.supports_add_constrained_variable(model::Optimizer, x::Type{S}) where {S <: MOI.AbstractScalarSet}
+function MOI.supports_add_constrained_variable(
+    model::Optimizer,
+    x::Type{S},
+) where {S<:MOI.AbstractScalarSet}
     return MOI.supports_add_constrained_variable(model.inner, x)::Bool
 end
 
-function MOI.supports_add_constrained_variables(model::Optimizer, x::Type{S}) where {S <: MOI.AbstractScalarSet}
+function MOI.supports_add_constrained_variables(
+    model::Optimizer,
+    x::Type{S},
+) where {S<:MOI.AbstractScalarSet}
     return MOI.supports_add_constrained_variables(model.inner, x)::Bool
 end
 
-function MOI.supports_constraint(model::Optimizer, f::Type{F}, s::Type{S}) where {F <: MOI.AbstractFunction, S <: MOI.AbstractSet}
+function MOI.supports_constraint(
+    model::Optimizer,
+    f::Type{F},
+    s::Type{S},
+) where {F<:MOI.AbstractFunction,S<:MOI.AbstractSet}
     return MOI.supports_constraint(model.inner, f, s)::Bool
 end
 
@@ -197,11 +209,18 @@ function MOI.add_variable(model::Optimizer)
     return MOI.add_variable(model.inner)
 end
 
-function MOI.add_constrained_variable(model::Optimizer, x::MOI.AbstractScalarSet)
+function MOI.add_constrained_variable(
+    model::Optimizer,
+    x::MOI.AbstractScalarSet,
+)
     return MOI.add_constrained_variable(model.inner, x)
 end
 
-function MOI.add_constraint(model::Optimizer, f::MOI.AbstractFunction, s::MOI.AbstractSet)
+function MOI.add_constraint(
+    model::Optimizer,
+    f::MOI.AbstractFunction,
+    s::MOI.AbstractSet,
+)
     return MOI.add_constraint(model.inner, f, s)
 end
 
@@ -250,9 +269,9 @@ function MOI.optimize!(model::Optimizer)
         ret = run(
             pipeline(
                 `$(model.solver_command) $(opts) $(fzn_file)`,
-                stdout=io,
+                stdout = io,
             ),
-            wait=true
+            wait = true,
         )
 
         if ret.exitcode != 0
@@ -274,7 +293,7 @@ function MOI.optimize!(model::Optimizer)
             MOI.OTHER_ERROR,
             MOI.NO_SOLUTION,
             NaN,
-            Dict{MOI.VariableIndex, Float64}[],
+            Dict{MOI.VariableIndex,Float64}[],
         )
         # throw(err)
     end
@@ -288,7 +307,11 @@ function MOI.get(model::Optimizer, ::MOI.TerminationStatus)
     return model.results.termination_status
 end
 
-function MOI.get(model::Optimizer, attr::MOI.VariablePrimal, vi::MOI.VariableIndex)
+function MOI.get(
+    model::Optimizer,
+    attr::MOI.VariablePrimal,
+    vi::MOI.VariableIndex,
+)
     if length(model.results.primal_solutions) >= attr.result_index
         return model.results.primal_solutions[attr.result_index][vi]
     else
@@ -304,20 +327,22 @@ MOI.get(model::Optimizer, ::MOI.SolveTimeSec) = model.solve_time
 MOI.supports(::Optimizer, ::MOI.TimeLimitSec) = true
 MOI.get(model::Optimizer, ::MOI.TimeLimitSec) = model.time_limit_ms / 1_000.0
 function MOI.set(model::Optimizer, ::MOI.TimeLimitSec, limit::Real)
-    model.time_limit_ms = limit * 1_000.0
+    return model.time_limit_ms = limit * 1_000.0
 end
 function MOI.set(model::Optimizer, ::MOI.TimeLimitSec, limit::Nothing)
-    model.time_limit_ms = 0.0
+    return model.time_limit_ms = 0.0
 end
 
 MOI.supports(::Optimizer, ::MOI.Silent) = true
 MOI.get(model::Optimizer, ::MOI.Silent) = !model.verboseness
 function MOI.set(model::Optimizer, ::MOI.Silent, silentness::Bool)
-    model.verboseness = !silentness
+    return model.verboseness = !silentness
 end
 
 MOI.supports(::Optimizer, ::MOI.ResultCount) = true
-MOI.get(model::Optimizer, ::MOI.ResultCount) = length(model.results.primal_solutions)
+function MOI.get(model::Optimizer, ::MOI.ResultCount)
+    return length(model.results.primal_solutions)
+end
 
 # Specific case of dual solution: getting it must be supported (MOI
 # requirement), but few CP solvers have it accessible (none?).
@@ -334,12 +359,15 @@ MOI.get(::Optimizer, ::MOI.DualStatus) = MOI.NO_SOLUTION
 Parses the output of `_parse_to_assignments` and stores the solutions into
 `model`. This function is responsible for filling `model.results`.
 """
-function _parse_to_moi_solutions(sols::Vector{Dict{String, Vector{Number}}}, model::Optimizer)
+function _parse_to_moi_solutions(
+    sols::Vector{Dict{String,Vector{Number}}},
+    model::Optimizer,
+)
     @assert length(model.results.primal_solutions) == 0
 
     for i in 1:length(sols)
         sol = sols[i]
-        push!(model.results.primal_solutions, Dict{MOI.VariableIndex, Real}())
+        push!(model.results.primal_solutions, Dict{MOI.VariableIndex,Real}())
 
         for (var_name, val) in sol
             # At least for now: no vector at the FlatZinc layer. Just ensure
@@ -351,8 +379,10 @@ function _parse_to_moi_solutions(sols::Vector{Dict{String, Vector{Number}}}, mod
         end
     end
 
-    model.results.termination_status = (length(sols) == 0) ? MOI.INFEASIBLE : MOI.OPTIMAL
-    model.results.primal_status = (length(sols) == 0) ? MOI.NO_SOLUTION : MOI.FEASIBLE_POINT
+    model.results.termination_status =
+        (length(sols) == 0) ? MOI.INFEASIBLE : MOI.OPTIMAL
+    model.results.primal_status =
+        (length(sols) == 0) ? MOI.NO_SOLUTION : MOI.FEASIBLE_POINT
 
     @assert length(model.results.primal_solutions) == length(sols)
     return

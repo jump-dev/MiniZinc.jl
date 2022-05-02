@@ -108,7 +108,10 @@ function write_variable(io::IO, name::String, s::MOI.LessThan{Float64})
     # typemin(Float64) is -Inf, which is "-Inf" as a string (which is not
     # allowed by FlatZinc). Take the next smallest value as a proxy, because
     # it has a standard scientific notation (and this is allowed in FlatZinc).
-    print(io, "var $(nextfloat(typemin(Float64)))..$(s.upper): $(name) :: output_var;")
+    print(
+        io,
+        "var $(nextfloat(typemin(Float64)))..$(s.upper): $(name) :: output_var;",
+    )
     return nothing
 end
 
@@ -121,7 +124,10 @@ function write_variable(io::IO, name::String, s::MOI.GreaterThan{Float64})
     # typemax(Float64) is Inf, which is "Inf" as a string (which is not
     # allowed by FlatZinc). Take the next largest value as a proxy, because
     # it has a standard scientific notation (and this is allowed in FlatZinc).
-    print(io, "var $(s.lower)..$(prevfloat(typemax(Float64))): $(name) :: output_var;")
+    print(
+        io,
+        "var $(s.lower)..$(prevfloat(typemax(Float64))): $(name) :: output_var;",
+    )
     return nothing
 end
 
@@ -134,7 +140,7 @@ function write_variable(
     io::IO,
     name::String,
     s::MOI.Interval{T},
-) where {T <: Union{Int, Float64}}
+) where {T<:Union{Int,Float64}}
     print(io, "var $(s.lower)..$(s.upper): $(name) :: output_var;")
     return nothing
 end
@@ -161,12 +167,7 @@ function write_set(::IO, ::Model, ::ConstraintInfo, ::MOI.AbstractSet)
     return nothing
 end
 
-function write_set(
-    io::IO,
-    model::Model,
-    con::ConstraintInfo,
-    s::CP.Domain{Int},
-)
+function write_set(io::IO, model::Model, con::ConstraintInfo, s::CP.Domain{Int})
     set_name = "SET" * string(length(model.sets_id))
     model.sets_id[con.index] = set_name
     set_value = join(collect(s.values), ", ")
@@ -277,14 +278,7 @@ function write_constraint(
     },
 ) where {T}
     # *_eq, *_le, *_lt, *_ne
-    write_constraint(
-        io,
-        model,
-        index,
-        f,
-        s,
-        Val(_promote_type(model, [f])),
-    )
+    write_constraint(io, model, index, f, s, Val(_promote_type(model, [f])))
     return nothing
 end
 
@@ -293,8 +287,8 @@ function write_constraint(
     model::Model,
     index::MOI.ConstraintIndex,
     f::MOI.ScalarAffineFunction{T},
-    s::Union{MOI.EqualTo{U}, MOI.LessThan{U}},
-) where {T, U}
+    s::Union{MOI.EqualTo{U},MOI.LessThan{U}},
+) where {T,U}
     # *_lin_eq, *_lin_le
     variables, _ = _saf_to_coef_vars(f)
     write_constraint(
@@ -316,7 +310,7 @@ function write_constraint(
     s::Union{
         CP.Reification{MOI.EqualTo{T}},
         CP.Reification{MOI.LessThan{T}},
-        CP.Reification{CP.Strictly{MOI.LessThan{T}, T}},
+        CP.Reification{CP.Strictly{MOI.LessThan{T},T}},
         CP.Reification{CP.DifferentFrom{T}},
     },
 ) where {T}
@@ -340,10 +334,10 @@ function write_constraint(
     s::Union{
         CP.Reification{MOI.EqualTo{U}},
         CP.Reification{MOI.LessThan{U}},
-        CP.Reification{CP.Strictly{MOI.LessThan{U}, U}},
+        CP.Reification{CP.Strictly{MOI.LessThan{U},U}},
         CP.Reification{CP.DifferentFrom{T}},
     },
-) where {T, U}
+) where {T,U}
     # *_lin_eq_reif, *_lin_le_reif, *_lin_lt_reif, *_lin_ne_reif
     variables = _vaf_to_vars(f)
     write_constraint(
@@ -362,7 +356,7 @@ function write_constraint(
     model::Model,
     index::MOI.ConstraintIndex,
     f::MOI.VectorOfVariables,
-    s::Union{CP.MaximumAmong, CP.MinimumAmong},
+    s::Union{CP.MaximumAmong,CP.MinimumAmong},
 )
     # array_*_maximum, array_*_minimum
     write_constraint(
@@ -715,7 +709,7 @@ function write_constraint(
     model::Model,
     ::MOI.ConstraintIndex,
     f::MOI.VectorOfVariables,
-    s::CP.Reification{CP.Strictly{MOI.LessThan{Int}, Int}},
+    s::CP.Reification{CP.Strictly{MOI.LessThan{Int},Int}},
     ::Val{:int},
 )
     @assert MOI.output_dimension(f) == 2
@@ -734,7 +728,7 @@ function write_constraint(
     model::Model,
     ::MOI.ConstraintIndex,
     f::MOI.VectorAffineFunction,
-    s::CP.Reification{CP.Strictly{MOI.LessThan{Int}, Int}},
+    s::CP.Reification{CP.Strictly{MOI.LessThan{Int},Int}},
     ::Val{:int},
 )
     @assert MOI.output_dimension(f) == 2
@@ -823,7 +817,7 @@ function write_constraint(
     f::MOI.VariableIndex,
     s::MOI.EqualTo{T},
     ::Val{:bool},
-) where {T <: Union{Int, Bool}}
+) where {T<:Union{Int,Bool}}
     # Hypothesis: !cons.output_as_part_of_variable.
     print(io, "bool_eq($(_fzn_f(model, f)), $(Bool(s.value)))")
     return nothing
@@ -836,7 +830,7 @@ function write_constraint(
     f::MOI.ScalarAffineFunction,
     s::MOI.EqualTo{T},
     ::Val{:bool},
-) where {T <: Union{Int, Bool}}
+) where {T<:Union{Int,Bool}}
     variables, coefficients = _saf_to_coef_vars(f)
     value = s.value - f.constant
     print(
@@ -1045,7 +1039,7 @@ function write_constraint(
     model::Model,
     ::MOI.ConstraintIndex,
     f::MOI.VariableIndex,
-    s::CP.Strictly{MOI.LessThan{Float64}, Float64},
+    s::CP.Strictly{MOI.LessThan{Float64},Float64},
     ::Val{:float},
 )
     print(io, "float_lt($(_fzn_f(model, f)), $(s.set.upper))")
@@ -1160,7 +1154,7 @@ function write_constraint(
     model::Model,
     ::MOI.ConstraintIndex,
     f::MOI.VectorOfVariables,
-    s::CP.Reification{CP.Strictly{MOI.LessThan{Float64}, Float64}},
+    s::CP.Reification{CP.Strictly{MOI.LessThan{Float64},Float64}},
     ::Val{:float},
 )
     @assert MOI.output_dimension(f) == 2
@@ -1178,7 +1172,7 @@ function write_constraint(
     model::Model,
     ::MOI.ConstraintIndex,
     f::MOI.VectorAffineFunction,
-    s::CP.Reification{CP.Strictly{MOI.LessThan{Float64}, Float64}},
+    s::CP.Reification{CP.Strictly{MOI.LessThan{Float64},Float64}},
     ::Val{:float},
 )
     @assert MOI.output_dimension(f) == 2
