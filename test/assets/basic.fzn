@@ -1,0 +1,3 @@
+% Excerpt from https://www.minizinc.org/doc-2.5.5/en/fzn-spec.html#output
+var 1..3: x :: output_var;
+solve satisfy;
