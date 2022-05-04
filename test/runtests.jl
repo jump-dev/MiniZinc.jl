@@ -1,4 +1,4 @@
-# Copyright (c) 2022 FlatZinc.jl contributors
+# Copyright (c) 2022 MiniZinc.jl contributors
 #
 # Use of this source code is governed by an MIT-style license that can be found
 # in the LICENSE.md file or at https://opensource.org/licenses/MIT.
@@ -6,11 +6,11 @@
 import Pkg
 Pkg.pkg"add MathOptInterface#od/cpsat-countgt"
 
-module TestFlatZinc
+module TestMiniZinc
 
 using Test
 import MathOptInterface
-import FlatZinc
+import MiniZinc
 import Chuffed_jll
 
 const MOI = MathOptInterface
@@ -28,7 +28,7 @@ end
 
 function _test_chuffed_asset(file, args...)
     filename = joinpath(@__DIR__, "assets", file)
-    ret = FlatZinc.run(Chuffed_jll.fznchuffed, filename, args...)
+    ret = MiniZinc.run(Chuffed_jll.fznchuffed, filename, args...)
     return replace(ret, "\r\n" => "\n")
 end
 
@@ -88,7 +88,7 @@ function test_moi_basic_fzn()
     @test MOI.is_valid(model, x_int)
     @test MOI.is_valid(model, c1)
     @test MOI.is_valid(model, c2)
-    solver = FlatZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
+    solver = MiniZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
     index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1
@@ -105,7 +105,7 @@ function test_moi_infeasible_fzn()
     @test MOI.is_valid(model, x_int)
     @test MOI.is_valid(model, c1)
     @test MOI.is_valid(model, c2)
-    solver = FlatZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
+    solver = MiniZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
     _, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OTHER_ERROR
     @test MOI.get(solver, MOI.ResultCount()) == 0
@@ -118,13 +118,13 @@ function test_moi_one_solution_fzn()
     MOI.add_constraint(model, x, MOI.Interval(1, 10))
     MOI.set(model, MOI.ObjectiveFunction{typeof(x)}(), x)
     MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
-    solver = FlatZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
+    solver = MiniZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
     index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) == 10
     MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
-    solver = FlatZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
+    solver = MiniZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
     index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1
@@ -141,7 +141,7 @@ function test_moi_int_lin()
         MOI.add_constraint(model, 1 * x[i], MOI.LessThan(1))
     end
     MOI.add_constraint(model, sum(1 * x[i] for i in 1:3), MOI.EqualTo(2))
-    solver = FlatZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
+    solver = MiniZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
     index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1
@@ -165,7 +165,7 @@ function test_moi_all_different()
         MOI.VectorOfVariables([x, y, z]),
         MOI.AllDifferent(3),
     )
-    solver = FlatZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
+    solver = MiniZinc.Optimizer{Int}(Chuffed_jll.fznchuffed)
     index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1
@@ -178,4 +178,4 @@ end
 
 end
 
-TestFlatZinc.runtests()
+TestMiniZinc.runtests()

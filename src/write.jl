@@ -1,4 +1,4 @@
-# Copyright (c) 2022 FlatZinc.jl contributors
+# Copyright (c) 2022 MiniZinc.jl contributors
 # Copyright (c) 2020 Thibaut Cuvelier
 #
 # Use of this source code is governed by an MIT-style license that can be found
@@ -51,19 +51,19 @@ function _write_variables(io::IO, model::Model{T}) where {T}
         lb, ub = info.lb, info.ub
         if info.is_bin
             if lb == ub == 0
-                print(io, "var bool: $(info.name) :: output_var = false;")
+                print(io, "var bool: $(info.name) = false;")
             elseif lb == ub == 1
-                print(io, "var bool: $(info.name) :: output_var = true;")
+                print(io, "var bool: $(info.name) = true;")
             else
-                print(io, "var bool: $(info.name) :: output_var;")
+                print(io, "var bool: $(info.name);")
             end
         elseif info.is_int
             if lb == ub
-                print(io, "var int: $(info.name) :: output_var = $lb;")
+                print(io, "var int: $(info.name) = $lb;")
             elseif typemin(T) < lb && ub < typemax(T)
-                print(io, "var $lb .. $ub: $(info.name) :: output_var;")
+                print(io, "var $lb .. $ub: $(info.name);")
             else
-                print(io, "var int: $(info.name) :: output_var;")
+                print(io, "var int: $(info.name);")
                 if ub < typemax(T)
                     constraint_lines *= "constraint int_lt($(info.name), $ub);\n"
                 end
@@ -73,22 +73,41 @@ function _write_variables(io::IO, model::Model{T}) where {T}
             end
         else
             if lb == ub
-                print(io, "var float: $(info.name) :: output_var = $lb;")
+                print(io, "var float: $(info.name) = $lb;")
             elseif typemin(T) < lb && ub < typemax(T)
-                print(io, "var $lb .. $ub: $(info.name) :: output_var;")
+                print(io, "var $lb .. $ub: $(info.name);")
             else
-                print(io, "var float: $(info.name) :: output_var;")
+                print(io, "var float: $(info.name);")
                 if ub < typemax(T)
-                    constraint_lines *= "constraint float_lt($(info.name), $ub);\n"
+                    constraint_lines *= "constraint $(info.name) <= $ub;\n"
                 end
                 if typemin(T) < lb
-                    constraint_lines *= "constraint float_lt($lb, $(info.name));\n"
+                    constraint_lines *= "constraint $(info.name) >= $lb;\n"
                 end
             end
         end
     end
     return variables, constraint_lines
 end
+
+_to_string(variables, f::MOI.VariableIndex) = variables[f].name
+
+function _to_string(variables, f::MOI.VectorOfVariables)
+    inner = join([_to_string(variables, v) for v in f.variables], ", ")
+    return "[$inner]"
+end
+
+function _to_string(variables, f::MOI.ScalarAffineFunction)
+    ret = ""
+    prefix = ""
+    for t in f.terms
+        name = _to_string(variables, t.variable)
+        ret *= "$(prefix)$(t.coefficient)*$name"
+        prefix = " + "
+    end
+    return ret
+end
+
 
 function _write_constraint(
     io::IO,
@@ -98,25 +117,16 @@ function _write_constraint(
     S::Type{MOI.AllDifferent},
 )
     for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
-        print(io, "constraint all_different_int")
         f = MOI.get(model, MOI.ConstraintFunction(), ci)
-        prefix = "(["
-        for x in f.variables
-            print(io, prefix, variables[x].name)
-            prefix = ", "
-        end
-        println(io, "]);")
+        str = _to_string(variables, f)
+        print(io, "constraint all_different(", str, ");")
     end
     return
 end
 
-_set_to_constraint(::Type{<:MOI.LessThan{<:Integer}}) = "int_lin_le"
-_set_to_constraint(::Type{<:MOI.GreaterThan{<:Integer}}) = "int_lin_ge"
-_set_to_constraint(::Type{<:MOI.EqualTo{<:Integer}}) = "int_lin_eq"
-
-_set_to_constraint(::Type{<:MOI.LessThan{<:Real}}) = "float_lin_le"
-_set_to_constraint(::Type{<:MOI.GreaterThan{<:Real}}) = "float_lin_ge"
-_set_to_constraint(::Type{<:MOI.EqualTo{<:Real}}) = "float_lin_eq"
+_sense(s::MOI.LessThan) = " <= "
+_sense(s::MOI.GreaterThan) = " >= "
+_sense(s::MOI.EqualTo) = " = "
 
 _rhs(s::MOI.LessThan) = s.upper
 _rhs(s::MOI.GreaterThan) = s.lower
@@ -129,19 +139,14 @@ function _write_constraint(
     F::Type{MOI.ScalarAffineFunction{T}},
     S::Type{<:Union{MOI.LessThan{T},MOI.GreaterThan{T},MOI.EqualTo{T}}},
 ) where {T}
-    set = _set_to_constraint(S)
     for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
         f = MOI.get(model, MOI.ConstraintFunction(), ci)
         s = MOI.get(model, MOI.ConstraintSet(), ci)
-        coefs = join(["$(t.coefficient)" for t in f.terms], ", ")
-        vars = join([_to_string(variables, t.variable) for t in f.terms], ", ")
-        rhs = "$(_rhs(s) - f.constant)"
-        println(io, "constraint $set ([$coefs], [$vars], $rhs);")
+        print(io, "constraint ", _to_string(variables, f))
+        println(io, _sense(s), _rhs(s) - f.constant, ";")
     end
     return
 end
-
-_to_string(variables, f::MOI.VariableIndex) = variables[f].name
 
 function Base.write(io::IO, model::Model{T}) where {T}
     MOI.FileFormats.create_unique_variable_names(

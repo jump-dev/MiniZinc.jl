@@ -1,47 +1,12 @@
-# Copyright (c) 2022 FlatZinc.jl contributors
+# Copyright (c) 2022 MiniZinc.jl contributors
 #
 # Use of this source code is governed by an MIT-style license that can be found
 # in the LICENSE.md file or at https://opensource.org/licenses/MIT.
 
-module FlatZinc
-
-import MathOptInterface
-const MOI = MathOptInterface
-
-function run(solver_cmd::F, filename, args = String[]) where {F}
-    args = copy(args)
-    push!(args, filename)
-    try
-        solver_cmd() do exe
-            return String(read(`$exe $args`))
-        end
-    catch
-        return ""
-    end
-end
-
-MOI.Utilities.@model(
-    Model,
-    (MOI.ZeroOne, MOI.Integer),
-    (MOI.EqualTo, MOI.GreaterThan, MOI.LessThan, MOI.Interval),
-    (
-        MOI.AllDifferent,
-        MOI.Among,
-        MOI.CountAtLeast,
-        MOI.CountDistinct,
-        MOI.CountGreaterThan,
-    ),
-    (),
-    (),
-    (MOI.ScalarAffineFunction,),
-    (MOI.VectorOfVariables,),
-    ()
-)
-
 """
     Optimizer{T}(solver_cmd) where {T}
 
-Construct a new FlatZinc Optimizer.
+Construct a new MiniZinc Optimizer.
 """
 mutable struct Optimizer{T} <: MOI.AbstractOptimizer
     solver_cmd::Function
@@ -67,8 +32,6 @@ function MOI.supports_constraint(
 ) where {F,S}
     return MOI.supports_constraint(model.inner, F, S)
 end
-
-include("write.jl")
 
 function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     MOI.empty!(dest.inner)
@@ -99,7 +62,7 @@ end
 
 function MOI.get(
     model::Optimizer,
-    attr::MOI.VariablePrimal,
+    ::MOI.VariablePrimal,
     x::MOI.VariableIndex,
 )
     return model.primal_solution[x]
@@ -126,5 +89,3 @@ MOI.get(::Optimizer, ::MOI.DualStatus) = MOI.NO_SOLUTION
 function MOI.get(model::Optimizer, ::MOI.ResultCount)
     return model.has_solution ? 1 : 0
 end
-
-end # module
