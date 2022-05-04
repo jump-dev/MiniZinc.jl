@@ -317,6 +317,75 @@ function test_write_alldifferent()
     return
 end
 
+function test_write_countdistinct()
+    model = MiniZinc.Model{Int}()
+    y = [MOI.add_constrained_variable(model, MOI.Integer()) for _ in 1:4]
+    x = first.(y)
+    MOI.add_constraint.(model, x, MOI.Interval(1, 4))
+    MOI.add_constraint(model, MOI.VectorOfVariables(x), MOI.CountDistinct(4))
+    for i in 1:4
+        MOI.set(model, MOI.VariableName(), x[i], "x$i")
+    end
+    @test sprint(write, model) == """
+    include "nvalue.mzn";
+    var 1 .. 4: x1;
+    var 1 .. 4: x2;
+    var 1 .. 4: x3;
+    var 1 .. 4: x4;
+    constraint nvalue(x1, [x2, x3, x4]);
+    solve satisfy;
+    """
+    return
+end
+
+function test_write_among()
+    model = MiniZinc.Model{Int}()
+    x = [MOI.add_constrained_variable(model, MOI.Integer())[1] for _ in 1:4]
+    for i in 1:4
+        MOI.set(model, MOI.VariableName(), x[i], "x$i")
+    end
+    set = Set([3, 4])
+    MOI.add_constraint(model, MOI.VectorOfVariables(x), MOI.Among(4, set))
+    @test sprint(write, model) == """
+    include "among.mzn";
+    var int: x1;
+    var int: x2;
+    var int: x3;
+    var int: x4;
+    constraint among(x1, [x2, x3, x4], {3, 4});
+    solve satisfy;
+    """
+    return
+end
+
+function test_write_countgreaterthan()
+    model = MiniZinc.Model{Int}()
+    c, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    y, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    x = [MOI.add_constrained_variable(model, MOI.Integer())[1] for _ in 1:3]
+    MOI.add_constraint(
+        model,
+        MOI.VectorOfVariables([c; y; x]),
+        MOI.CountGreaterThan(5),
+    )
+    MOI.set(model, MOI.VariableName(), c, "c")
+    MOI.set(model, MOI.VariableName(), y, "y")
+    for i in 1:3
+        MOI.set(model, MOI.VariableName(), x[i], "x$i")
+    end
+    @test sprint(write, model) == """
+    include "count_gt.mzn";
+    var int: c;
+    var int: y;
+    var int: x1;
+    var int: x2;
+    var int: x3;
+    constraint count_gt([x1, x2, x3], y, c);
+    solve satisfy;
+    """
+    return
+end
+
 function _test_chuffed_asset(file, args...)
     filename = joinpath(@__DIR__, "assets", file)
     ret = MiniZinc.run_flatzinc(Chuffed_jll.fznchuffed, filename, args...)

@@ -164,7 +164,7 @@ function _write_constraint(
         s = MOI.get(model, MOI.ConstraintSet(), ci)
         n = _to_string(variables, f.variables[1])
         x = _to_string(variables, f.variables[2:end])
-        v = string("{", join([i for i in s.set], ", "), "}")
+        v = string("{", join(sort([i for i in s.set]), ", "), "}")
         println(io, "constraint among(", n, ", ", x, ", ", v, ");")
     end
     return
