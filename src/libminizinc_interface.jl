@@ -5,18 +5,6 @@
 
 Chuffed() = joinpath(Chuffed_jll.artifact_dir, "chuffed.msc")
 
-function run(solver_cmd::F, filename, args = String[]) where {F}
-    args = copy(args)
-    push!(args, filename)
-    try
-        solver_cmd() do exe
-            return String(read(`$exe $args`))
-        end
-    catch
-        return ""
-    end
-end
-
 struct MiniZincExecutable{F}
     f::F
 end
@@ -34,5 +22,17 @@ end
 function run_minizinc(f::MiniZincExecutable, solver::String, filename::String)
     f.f() do exe
         return run(`$(exe) --solver $(solver) $(filename)`)
+    end
+end
+
+function run_flatzinc(solver_cmd::F, filename, args = String[]) where {F}
+    args = copy(args)
+    push!(args, filename)
+    try
+        solver_cmd() do exe
+            return String(read(`$exe $args`))
+        end
+    catch
+        return ""
     end
 end

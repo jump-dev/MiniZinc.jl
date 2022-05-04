@@ -42,12 +42,11 @@ function _variable_info(model::Model{T}, x) where {T}
 end
 
 function _write_variables(io::IO, model::Model{T}) where {T}
-    variables = Dict(
-        x => _variable_info(model, x) for
-        x in MOI.get(model, MOI.ListOfVariableIndices())
-    )
+    all_variables = MOI.get(model, MOI.ListOfVariableIndices())
+    variables = Dict(x => _variable_info(model, x) for x in all_variables)
     constraint_lines = ""
-    for (x, info) in variables
+    for x in all_variables
+        info = variables[x]
         lb, ub = info.lb, info.ub
         if info.is_bin
             if lb == ub == 0
@@ -68,7 +67,7 @@ function _write_variables(io::IO, model::Model{T}) where {T}
                     constraint_lines *= "constraint int_lt($(info.name), $ub);\n"
                 end
                 if typemin(T) < lb
-                    constraint_lines *= "constraint int_lt($lb, $(info.name));\n"
+                    constraint_lines *= "constraint int_gt($(info.name), $lb);\n"
                 end
             end
         else
@@ -86,18 +85,33 @@ function _write_variables(io::IO, model::Model{T}) where {T}
                 end
             end
         end
+        println(io)
     end
     return variables, constraint_lines
 end
 
-_to_string(variables, f::MOI.VariableIndex) = variables[f].name
+function _to_string(
+    variables,
+    f::MOI.VariableIndex;
+    include_constant::Bool = false,
+)
+    return variables[f].name
+end
 
-function _to_string(variables, f::MOI.VectorOfVariables)
+function _to_string(
+    variables,
+    f::MOI.VectorOfVariables;
+    include_constant::Bool = false,
+)
     inner = join([_to_string(variables, v) for v in f.variables], ", ")
     return "[$inner]"
 end
 
-function _to_string(variables, f::MOI.ScalarAffineFunction)
+function _to_string(
+    variables,
+    f::MOI.ScalarAffineFunction;
+    include_constant::Bool = false,
+)
     ret = ""
     prefix = ""
     for t in f.terms
@@ -105,9 +119,11 @@ function _to_string(variables, f::MOI.ScalarAffineFunction)
         ret *= "$(prefix)$(t.coefficient)*$name"
         prefix = " + "
     end
+    if include_constant
+        ret *=" + $(f.constant)"
+    end
     return ret
 end
-
 
 function _write_constraint(
     io::IO,
@@ -119,7 +135,7 @@ function _write_constraint(
     for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
         f = MOI.get(model, MOI.ConstraintFunction(), ci)
         str = _to_string(variables, f)
-        print(io, "constraint all_different(", str, ");")
+        println(io, "constraint alldifferent(", str, ");")
     end
     return
 end
@@ -148,6 +164,15 @@ function _write_constraint(
     return
 end
 
+function _write_predicates(io, model)
+    for (F, S) in MOI.get(model, MOI.ListOfConstraintTypesPresent())
+        if S == MOI.AllDifferent
+            println(io, "include \"alldifferent.mzn\";")
+        end
+    end
+    return
+end
+
 function Base.write(io::IO, model::Model{T}) where {T}
     MOI.FileFormats.create_unique_variable_names(
         model,
@@ -157,8 +182,9 @@ function Base.write(io::IO, model::Model{T}) where {T}
             s -> replace(s, r"[^A-Za-z0-9_]" => "_"),
         ],
     )
+    _write_predicates(io, model)
     variables, constraint_lines = _write_variables(io, model)
-    println(io, constraint_lines)
+    print(io, constraint_lines)
     for (F, S) in MOI.get(model, MOI.ListOfConstraintTypesPresent())
         if F == MOI.VariableIndex
             continue
@@ -173,7 +199,7 @@ function Base.write(io::IO, model::Model{T}) where {T}
         print(io, sense == MOI.MAX_SENSE ? "maximize " : "minimize ")
         F = MOI.get(model, MOI.ObjectiveFunctionType())
         f = MOI.get(model, MOI.ObjectiveFunction{F}())
-        print(io, _to_string(variables, f))
+        print(io, _to_string(variables, f; include_constant = true))
         println(io, ";")
     end
     return
