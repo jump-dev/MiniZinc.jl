@@ -26,12 +26,7 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
     has_solution::Bool
     primal_solution::Dict{MOI.VariableIndex,T}
     function Optimizer{T}(solver::String) where {T}
-        return new(
-            solver,
-            Model{T}(),
-            false,
-            Dict{MOI.VariableIndex,T}(),
-        )
+        return new(solver, Model{T}(), false, Dict{MOI.VariableIndex,T}())
     end
 end
 
@@ -95,11 +90,7 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     return index_map, false
 end
 
-function MOI.get(
-    model::Optimizer,
-    ::MOI.VariablePrimal,
-    x::MOI.VariableIndex,
-)
+function MOI.get(model::Optimizer, ::MOI.VariablePrimal, x::MOI.VariableIndex)
     return model.primal_solution[x]
 end
 

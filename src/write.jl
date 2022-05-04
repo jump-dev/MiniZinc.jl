@@ -89,21 +89,14 @@ function _write_variables(io::IO, model::Model{T}) where {T}
     return variables, constraint_lines
 end
 
-function _to_string(
-    variables,
-    f::MOI.VariableIndex;
-    include_constant::Bool = false,
-)
-    return variables[f].name
+_to_string(variables, f::MOI.VariableIndex; kwargs...) = variables[f].name
+
+function _to_string(variables, f::Vector{MOI.VariableIndex}; kwargs...)
+    return string("[", join([_to_string(variables, v) for v in f], ", "), "]")
 end
 
-function _to_string(
-    variables,
-    f::MOI.VectorOfVariables;
-    include_constant::Bool = false,
-)
-    inner = join([_to_string(variables, v) for v in f.variables], ", ")
-    return "[$inner]"
+function _to_string(variables, f::MOI.VectorOfVariables; kwargs...)
+    return _to_string(variables, f.variables; kwargs...)
 end
 
 function _to_string(
@@ -119,7 +112,7 @@ function _to_string(
         prefix = " + "
     end
     if include_constant
-        ret *=" + $(f.constant)"
+        ret *= " + $(f.constant)"
     end
     return ret
 end
@@ -135,6 +128,69 @@ function _write_constraint(
         f = MOI.get(model, MOI.ConstraintFunction(), ci)
         str = _to_string(variables, f)
         println(io, "constraint alldifferent(", str, ");")
+    end
+    return
+end
+
+function _write_constraint(
+    io::IO,
+    model,
+    variables,
+    F::Type{MOI.VectorOfVariables},
+    S::Type{MOI.CountDistinct},
+)
+    for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
+        f = MOI.get(model, MOI.ConstraintFunction(), ci)
+        str_n = _to_string(variables, f.variables[1])
+        str_x = _to_string(variables, f.variables[2:end])
+        println(io, "constraint nvalue(", str_n, ", ", str_x, ");")
+    end
+    return
+end
+
+# function _write_constraint(
+#     io::IO,
+#     model,
+#     variables,
+#     F::Type{MOI.VectorOfVariables},
+#     S::Type{MOI.Among},
+# )
+#     for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
+#         f = MOI.get(model, MOI.ConstraintFunction(), ci)
+#         str = _to_string(variables, f)
+#         println(io, "constraint nvalue(", str, ");")
+#     end
+#     return
+# end
+
+# function _write_constraint(
+#     io::IO,
+#     model,
+#     variables,
+#     F::Type{MOI.VectorOfVariables},
+#     S::Type{MOI.CountAtLeast},
+# )
+#     for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
+#         f = MOI.get(model, MOI.ConstraintFunction(), ci)
+#         str = _to_string(variables, f)
+#         println(io, "constraint nvalue(", str, ");")
+#     end
+#     return
+# end
+
+function _write_constraint(
+    io::IO,
+    model,
+    variables,
+    F::Type{MOI.VectorOfVariables},
+    S::Type{MOI.CountGreaterThan},
+)
+    for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
+        f = MOI.get(model, MOI.ConstraintFunction(), ci)
+        str_c = _to_string(variables, f.variables[1])
+        str_y = _to_string(variables, f.variables[2])
+        str_x = _to_string(variables, f.variables[3:end])
+        println(io, "constraint count_gt(", str_x, ", $str_y, $str_c);")
     end
     return
 end
@@ -167,6 +223,10 @@ function _write_predicates(io, model)
     for (F, S) in MOI.get(model, MOI.ListOfConstraintTypesPresent())
         if S == MOI.AllDifferent
             println(io, "include \"alldifferent.mzn\";")
+        elseif S == MOI.CountDistinct
+            println(io, "include \"nvalue.mzn\";")
+        elseif S == MOI.CountGreaterThan
+            println(io, "include \"count_gt.mzn\";")
         end
     end
     return
