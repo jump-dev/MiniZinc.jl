@@ -358,6 +358,33 @@ function test_write_among()
     return
 end
 
+function test_write_countatleast()
+    model = MiniZinc.Model{Int}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    y, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    z, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    variables = [x, y, y, z]
+    partitions = [2, 2]
+    set = Set([3])
+    MOI.add_constraint(
+        model,
+        MOI.VectorOfVariables(variables),
+        MOI.CountAtLeast(1, partitions, set),
+    )
+    MOI.set(model, MOI.VariableName(), x, "x")
+    MOI.set(model, MOI.VariableName(), y, "y")
+    MOI.set(model, MOI.VariableName(), z, "z")
+    @test sprint(write, model) == """
+    include "at_least.mzn";
+    var int: x;
+    var int: y;
+    var int: z;
+    constraint at_least(1, [{x, y}, {y, z}], {3});
+    solve satisfy;
+    """
+    return
+end
+
 function test_write_countgreaterthan()
     model = MiniZinc.Model{Int}()
     c, _ = MOI.add_constrained_variable(model, MOI.Integer())
@@ -563,6 +590,32 @@ function test_moi_among()
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     x_val = round.(Int, MOI.get.(solver, MOI.VariablePrimal(), x))
     @test x_val[1] == sum(x_val[i] in set for i in 2:length(x))
+    return
+end
+
+function test_moi_countatleast()
+    model = MOI.Utilities.Model{Int}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    y, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    z, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.add_constraint.(model, [x, y, z], MOI.Interval(0, 4))
+    variables = [x, y, y, z]
+    partitions = [2, 2]
+    set = Set([3])
+    MOI.add_constraint(
+        model,
+        MOI.VectorOfVariables(variables),
+        MOI.CountAtLeast(1, partitions, set),
+    )
+    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ResultCount()) >= 1
+    x_val = round(Int, MOI.get(solver, MOI.VariablePrimal(), index_map[x]))
+    y_val = round(Int, MOI.get(solver, MOI.VariablePrimal(), index_map[y]))
+    z_val = round.(Int, MOI.get.(solver, MOI.VariablePrimal(), index_map[z]))
+    @test x_val == 3 || y_val == 3
+    @test y_val == 3 || z_val == 3
     return
 end
 

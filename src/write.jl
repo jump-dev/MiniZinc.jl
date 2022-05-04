@@ -170,23 +170,44 @@ function _write_constraint(
     return
 end
 
-# function _write_constraint(
-#     io::IO,
-#     model,
-#     variables,
-#     F::Type{MOI.VectorOfVariables},
-#     S::Type{MOI.CountAtLeast},
-# )
-#     for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
-#         f = MOI.get(model, MOI.ConstraintFunction(), ci)
-#         s = MOI.get(model, MOI.ConstraintSet(), ci)
-#         n = s.n
-#         set = s.set
-#         str = _to_string(variables, f)
-#         println(io, "constraint nvalue($n, ", str, ");")
-#     end
-#     return
-# end
+function _write_constraint(
+    io::IO,
+    model,
+    variables,
+    F::Type{MOI.VectorOfVariables},
+    S::Type{MOI.CountAtLeast},
+)
+    for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
+        f = MOI.get(model, MOI.ConstraintFunction(), ci)
+        s = MOI.get(model, MOI.ConstraintSet(), ci)
+        offset = 0
+        print(io, "constraint at_least(", s.n, ", [")
+        prefix = ""
+        for p in s.partitions
+            print(io, prefix, "{")
+            inner_prefix = ""
+            for i in 1:p
+                print(
+                    io,
+                    inner_prefix,
+                    _to_string(variables, f.variables[offset+i]),
+                )
+                inner_prefix = ", "
+            end
+            print(io, "}")
+            offset += p
+            prefix = ", "
+        end
+        prefix = ""
+        print(io, "], {")
+        for i in sort([i for i in s.set])
+            print(io, prefix, i)
+            prefix = ", "
+        end
+        println(io, "});")
+    end
+    return
+end
 
 _sense(s::MOI.LessThan) = " <= "
 _sense(s::MOI.GreaterThan) = " >= "
