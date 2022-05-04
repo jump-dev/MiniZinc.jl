@@ -479,7 +479,21 @@ function test_moi_countdistinct()
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     x_val = round.(Int, MOI.get.(solver, MOI.VariablePrimal(), x))
     @test length(unique(x_val[2:end])) == x_val[1]
+    return
+end
 
+function test_moi_among()
+    model = MOI.Utilities.Model{Int}()
+    y = [MOI.add_constrained_variable(model, MOI.Integer()) for _ in 1:4]
+    x = first.(y)
+    set = Set([3, 4])
+    MOI.add_constraint(model, MOI.VectorOfVariables(x), MOI.Among(4, set))
+    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ResultCount()) >= 1
+    x_val = round.(Int, MOI.get.(solver, MOI.VariablePrimal(), x))
+    @test x_val[1] == sum(x_val[i] in set for i in 2:length(x))
     return
 end
 

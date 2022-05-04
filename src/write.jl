@@ -117,19 +117,9 @@ function _to_string(
     return ret
 end
 
-function _write_constraint(
-    io::IO,
-    model,
-    variables,
-    F::Type{MOI.VectorOfVariables},
-    S::Type{MOI.AllDifferent},
-)
-    for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
-        f = MOI.get(model, MOI.ConstraintFunction(), ci)
-        str = _to_string(variables, f)
-        println(io, "constraint alldifferent(", str, ");")
-    end
-    return
+struct MiniZincSet <: MOI.AbstractSet
+    name::String
+    fields::Vector{Union{Int,UnitRange{Int}}}
 end
 
 function _write_constraint(
@@ -137,31 +127,48 @@ function _write_constraint(
     model,
     variables,
     F::Type{MOI.VectorOfVariables},
-    S::Type{MOI.CountDistinct},
+    S::Type{<:Union{MOI.AllDifferent,MOI.CountDistinct,MOI.CountGreaterThan}},
 )
     for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
         f = MOI.get(model, MOI.ConstraintFunction(), ci)
-        str_n = _to_string(variables, f.variables[1])
-        str_x = _to_string(variables, f.variables[2:end])
-        println(io, "constraint nvalue(", str_n, ", ", str_x, ");")
+        s = MOI.get(model, MOI.ConstraintSet(), ci)
+        mzn = MiniZincSet(s)
+        strs =
+            [_to_string(variables, f.variables[field]) for field in mzn.fields]
+        println(io, "constraint $(mzn.name)(", join(strs, ", "), ");")
     end
     return
 end
 
-# function _write_constraint(
-#     io::IO,
-#     model,
-#     variables,
-#     F::Type{MOI.VectorOfVariables},
-#     S::Type{MOI.Among},
-# )
-#     for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
-#         f = MOI.get(model, MOI.ConstraintFunction(), ci)
-#         str = _to_string(variables, f)
-#         println(io, "constraint nvalue(", str, ");")
-#     end
-#     return
-# end
+function MiniZincSet(set::MOI.AllDifferent)
+    return MiniZincSet("alldifferent", [1:set.dimension])
+end
+
+function MiniZincSet(set::MOI.CountDistinct)
+    return MiniZincSet("nvalue", [1, 2:set.dimension])
+end
+
+function MiniZincSet(set::MOI.CountGreaterThan)
+    return MiniZincSet("count_gt", [3:set.dimension, 2, 1])
+end
+
+function _write_constraint(
+    io::IO,
+    model,
+    variables,
+    F::Type{MOI.VectorOfVariables},
+    S::Type{MOI.Among},
+)
+    for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
+        f = MOI.get(model, MOI.ConstraintFunction(), ci)
+        s = MOI.get(model, MOI.ConstraintSet(), ci)
+        n = _to_string(variables, f.variables[1])
+        x = _to_string(variables, f.variables[2:end])
+        v = string("{", join([i for i in s.set], ", "), "}")
+        println(io, "constraint among(", n, ", ", x, ", ", v, ");")
+    end
+    return
+end
 
 # function _write_constraint(
 #     io::IO,
@@ -172,28 +179,14 @@ end
 # )
 #     for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
 #         f = MOI.get(model, MOI.ConstraintFunction(), ci)
+#         s = MOI.get(model, MOI.ConstraintSet(), ci)
+#         n = s.n
+#         set = s.set
 #         str = _to_string(variables, f)
-#         println(io, "constraint nvalue(", str, ");")
+#         println(io, "constraint nvalue($n, ", str, ");")
 #     end
 #     return
 # end
-
-function _write_constraint(
-    io::IO,
-    model,
-    variables,
-    F::Type{MOI.VectorOfVariables},
-    S::Type{MOI.CountGreaterThan},
-)
-    for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
-        f = MOI.get(model, MOI.ConstraintFunction(), ci)
-        str_c = _to_string(variables, f.variables[1])
-        str_y = _to_string(variables, f.variables[2])
-        str_x = _to_string(variables, f.variables[3:end])
-        println(io, "constraint count_gt(", str_x, ", $str_y, $str_c);")
-    end
-    return
-end
 
 _sense(s::MOI.LessThan) = " <= "
 _sense(s::MOI.GreaterThan) = " >= "
@@ -223,6 +216,10 @@ function _write_predicates(io, model)
     for (F, S) in MOI.get(model, MOI.ListOfConstraintTypesPresent())
         if S == MOI.AllDifferent
             println(io, "include \"alldifferent.mzn\";")
+        elseif S == MOI.Among
+            println(io, "include \"among.mzn\";")
+        elseif S == MOI.CountAtLeast
+            println(io, "include \"at_least.mzn\";")
         elseif S == MOI.CountDistinct
             println(io, "include \"nvalue.mzn\";")
         elseif S == MOI.CountGreaterThan
