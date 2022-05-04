@@ -3,27 +3,65 @@
 # Use of this source code is governed by an MIT-style license that can be found
 # in the LICENSE.md file or at https://opensource.org/licenses/MIT.
 
+Chuffed() = joinpath(Chuffed_jll.artifact_dir, "chuffed.msc")
+
+function run_flatzinc(solver_cmd::F, filename, args = String[]) where {F}
+    try
+        solver_cmd() do exe
+            return String(read(`$exe $(vcat(args, filename))`))
+        end
+    catch
+        return ""
+    end
+end
+
 """
     Optimizer{T}(solver_cmd) where {T}
 
 Construct a new MiniZinc Optimizer.
 """
 mutable struct Optimizer{T} <: MOI.AbstractOptimizer
-    solver_cmd::Function
-    options::Vector{String}
+    solver::String
     inner::Model{T}
     has_solution::Bool
     primal_solution::Dict{MOI.VariableIndex,T}
-    function Optimizer{T}(solver_cmd) where {T}
+    function Optimizer{T}(solver::String) where {T}
         return new(
-            solver_cmd,
-            String[],
+            solver,
             Model{T}(),
             false,
             Dict{MOI.VariableIndex,T}(),
         )
     end
 end
+
+exe_minizinc_jll() = MiniZinc_jll.minizinc
+
+function exe_minizinc_local(
+    dir = "/Users/Oscar/Documents/Code/libminizinc/build/install",
+)
+    return f -> f(joinpath(dir, "bin/minizinc"))
+end
+
+function _run_minizinc(dest::Optimizer)
+    dir = mktempdir()
+    filename = joinpath(dir, "model.mzn")
+    output = joinpath(dir, "model.ozn")
+    open(filename, "w") do io
+        return write(io, dest.inner)
+    end
+    # minizinc = exe_minizinc_local()
+    minizinc = exe_minizinc_jll()
+    minizinc() do exe
+        return run(`$(exe) --solver $(dest.solver) -o $(output) $(filename)`)
+    end
+    if isfile(output)
+        return read(output, String)
+    end
+    return ""
+end
+
+# The MOI interface
 
 function MOI.supports_constraint(
     model::Optimizer,
@@ -37,17 +75,14 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     MOI.empty!(dest.inner)
     empty!(dest.primal_solution)
     index_map = MOI.copy_to(dest.inner, src)
-    open("temp.fzn", "w") do io
-        return write(io, dest.inner)
-    end
-    variable_map = Dict(
-        MOI.get(dest.inner, MOI.VariableName(), x) => x for
-        x in MOI.get(src, MOI.ListOfVariableIndices())
-    )
-    ret = run(dest.solver_cmd, "temp.fzn", dest.options)
+    ret = _run_minizinc(dest)
     if isempty(ret)
         dest.has_solution = false
     else
+        variable_map = Dict(
+            MOI.get(dest.inner, MOI.VariableName(), x) => x for
+            x in MOI.get(src, MOI.ListOfVariableIndices())
+        )
         dest.has_solution = true
         for line in split(ret, "\n")
             m = match(r"(.+) \= (.+)\;", line)

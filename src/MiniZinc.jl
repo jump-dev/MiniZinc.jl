@@ -29,7 +29,6 @@ MOI.Utilities.@model(
     ()
 )
 
-include("libminizinc_interface.jl")
 include("write.jl")
 include("optimize.jl")
 
