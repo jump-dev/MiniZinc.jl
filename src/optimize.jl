@@ -79,10 +79,7 @@ function MOI.supports_constraint(
     return MOI.supports_constraint(model.inner, F, S)
 end
 
-function MOI.supports(
-    model::Optimizer,
-    attr::MOI.AbstractModelAttribute,
-)
+function MOI.supports(model::Optimizer, attr::MOI.AbstractModelAttribute)
     return MOI.supports(model.inner, attr)
 end
 
