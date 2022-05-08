@@ -30,12 +30,18 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
     end
 end
 
-exe_minizinc_jll() = MiniZinc_jll.minizinc
-
-function exe_minizinc_local(
-    dir = "/Users/Oscar/Documents/Code/libminizinc/build/install",
-)
-    return f -> f(joinpath(dir, "bin/minizinc"))
+function _minizinc_exe(f::F) where {F}
+    user_dir = get(ENV, "JULIA_LIBMINIZINC_DIR", nothing)
+    if user_dir !== nothing
+        return f(joinpath(user_dir, "bin/minizinc"))
+    elseif Sys.islinux()
+        return MiniZinc_jll.minizinc(f)
+    end
+    return error(
+        "Unable to call libminizinc. Please manually install a copy and set " *
+        "the `JULIA_LIBMINIZINC_DIR` environment variable. See the README.md " *
+        "for more details",
+    )
 end
 
 function _run_minizinc(dest::Optimizer)
@@ -45,9 +51,7 @@ function _run_minizinc(dest::Optimizer)
     open(filename, "w") do io
         return write(io, dest.inner)
     end
-    # minizinc = exe_minizinc_local()
-    minizinc = exe_minizinc_jll()
-    minizinc() do exe
+    _minizinc_exe() do exe
         return run(`$(exe) --solver $(dest.solver) -o $(output) $(filename)`)
     end
     if isfile(output)
@@ -58,12 +62,25 @@ end
 
 # The MOI interface
 
+MOI.is_empty(model::Optimizer) = MOI.is_empty(model.inner)
+
+function MOI.empty!(model::Optimizer)
+    MOI.empty!(model.inner)
+    model.has_solution = false
+    empty!(model.primal_solution)
+    return
+end
+
 function MOI.supports_constraint(
     model::Optimizer,
     ::Type{F},
     ::Type{S},
-) where {F,S}
+) where {F<:MOI.AbstractFunction,S<:MOI.AbstractSet}
     return MOI.supports_constraint(model.inner, F, S)
+end
+
+function MOI.supports(model::Optimizer, attr::MOI.AbstractModelAttribute)
+    return MOI.supports(model.inner, attr)
 end
 
 function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
