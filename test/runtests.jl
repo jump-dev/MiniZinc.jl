@@ -722,7 +722,6 @@ function test_moi_tests()
         exclude = String[
             # Chuffed gets wrong answer
             "test_cpsat_BinPacking",
-            "test_cpsat_Path",
         ],
     )
     return
