@@ -1,3 +1,6 @@
+**Warning: this package is still under active development and requires a non-released
+branch of MathOptInterface to function. It is not intended for use (yet).**
+
 # MiniZinc.jl
 
 `MiniZinc.jl` is a wrapper for the [MiniZinc](https://www.minizinc.org)
