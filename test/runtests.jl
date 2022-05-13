@@ -719,10 +719,8 @@ function test_moi_tests()
         model,
         MOI.Test.Config(Int),
         include = String["test_cpsat_"],
-        exclude = String[
-            # Chuffed gets wrong answer
-            "test_cpsat_BinPacking",
-        ],
+        # Chuffed gets wrong answer?
+        exclude = String["test_cpsat_BinPacking"],
     )
     return
 end
