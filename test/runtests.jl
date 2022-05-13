@@ -715,13 +715,8 @@ function test_moi_tests()
         MOI.Utilities.Model{Int}(),
         MiniZinc.Optimizer{Int}(MiniZinc.Chuffed()),
     )
-    MOI.Test.runtests(
-        model,
-        MOI.Test.Config(Int),
-        include = String["test_cpsat_"],
-        # Chuffed gets wrong answer?
-        exclude = String["test_cpsat_BinPacking"],
-    )
+    config = MOI.Test.Config(Int)
+    MOI.Test.runtests(model, config, include = String["test_cpsat_"])
     return
 end
 
