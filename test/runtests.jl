@@ -723,7 +723,7 @@ function test_moi_tests()
             # Chuffed gets wrong answer
             "test_cpsat_BinPacking",
             "test_cpsat_Path",
-        ]
+        ],
     )
     return
 end
