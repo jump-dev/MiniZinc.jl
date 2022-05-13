@@ -48,31 +48,26 @@ function _write_variables(io::IO, model::Model{T}) where {T}
         info = variables[x]
         lb, ub = info.lb, info.ub
         if info.is_bin
-            if lb == ub == 0
-                print(io, "var bool: $(info.name) = false;")
-            elseif lb == ub == 1
-                print(io, "var bool: $(info.name) = true;")
-            else
-                print(io, "var bool: $(info.name);")
+            print(io, "var bool: $(info.name);")
+            if ub == 0
+                constraint_lines *= "constraint bool_eq($(info.name), false);\n"
+            elseif lb == 1
+                constraint_lines *= "constraint bool_eq($(info.name), true);\n"
             end
         elseif info.is_int
-            if lb == ub
-                print(io, "var int: $(info.name) = $lb;")
-            elseif typemin(T) < lb && ub < typemax(T)
+            if typemin(T) < lb && ub < typemax(T)
                 print(io, "var $lb .. $ub: $(info.name);")
             else
                 print(io, "var int: $(info.name);")
                 if ub < typemax(T)
-                    constraint_lines *= "constraint int_lt($(info.name), $ub);\n"
+                    constraint_lines *= "constraint int_le($(info.name), $ub);\n"
                 end
                 if typemin(T) < lb
-                    constraint_lines *= "constraint int_gt($(info.name), $lb);\n"
+                    constraint_lines *= "constraint int_ge($(info.name), $lb);\n"
                 end
             end
         else
-            if lb == ub
-                print(io, "var float: $(info.name) = $lb;")
-            elseif typemin(T) < lb && ub < typemax(T)
+            if typemin(T) < lb && ub < typemax(T)
                 print(io, "var $lb .. $ub: $(info.name);")
             else
                 print(io, "var float: $(info.name);")
@@ -127,7 +122,15 @@ function _write_constraint(
     model,
     variables,
     F::Type{MOI.VectorOfVariables},
-    S::Type{<:Union{MOI.AllDifferent,MOI.CountDistinct,MOI.CountGreaterThan}},
+    S::Type{
+        <:Union{
+            MOI.AllDifferent,
+            MOI.CountDistinct,
+            MOI.CountGreaterThan,
+            MOI.Cumulative,
+            MOI.Circuit,
+        },
+    },
 )
     for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
         f = MOI.get(model, MOI.ConstraintFunction(), ci)
@@ -152,12 +155,22 @@ function MiniZincSet(set::MOI.CountGreaterThan)
     return MiniZincSet("count_gt", [3:set.dimension, 2, 1])
 end
 
+function MiniZincSet(set::MOI.Cumulative)
+    d = set.dimension
+    n = div(d - 1, 3)
+    return MiniZincSet("cumulative", [1:n, n .+ (1:n), 2n .+ (1:n), d])
+end
+
+function MiniZincSet(set::MOI.Circuit)
+    return MiniZincSet("circuit", [1:set.dimension])
+end
+
 function _write_constraint(
     io::IO,
     model,
     variables,
     F::Type{MOI.VectorOfVariables},
-    S::Type{MOI.Among},
+    S::Type{MOI.CountBelongs},
 )
     for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
         f = MOI.get(model, MOI.ConstraintFunction(), ci)
@@ -209,6 +222,63 @@ function _write_constraint(
     return
 end
 
+function _write_constraint(
+    io::IO,
+    model,
+    variables,
+    F::Type{MOI.VectorOfVariables},
+    S::Type{<:MOI.BinPacking},
+)
+    for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
+        f = MOI.get(model, MOI.ConstraintFunction(), ci)
+        s = MOI.get(model, MOI.ConstraintSet(), ci)
+        x = _to_string(variables, f.variables)
+        print(io, "constraint bin_packing(", s.capacity, ", ", x, ", ")
+        println(io, s.weights, ");")
+    end
+    return
+end
+
+function _write_constraint(
+    io::IO,
+    model,
+    variables,
+    F::Type{MOI.VectorOfVariables},
+    S::Type{MOI.Path},
+)
+    for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
+        f = MOI.get(model, MOI.ConstraintFunction(), ci)
+        set = MOI.get(model, MOI.ConstraintSet(), ci)
+        s = _to_string(variables, f.variables[1])
+        t = _to_string(variables, f.variables[2])
+        ns = _to_string(variables, f.variables[2 .+ (1:set.N)])
+        es = _to_string(variables, f.variables[(2+set.N).+(1:set.E)])
+        print(io, "constraint path(", set.N, ", ", set.E, ", ", set.from, ", ")
+        println(io, set.to, ", ", s, ", ", t, ", ", ns, ", ", es, ");")
+    end
+    return
+end
+
+function _write_constraint(
+    io::IO,
+    model,
+    variables,
+    F::Type{MOI.VectorOfVariables},
+    S::Type{<:MOI.Table},
+)
+    for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
+        f = MOI.get(model, MOI.ConstraintFunction(), ci)
+        set = MOI.get(model, MOI.ConstraintSet(), ci)
+        x = _to_string(variables, f.variables)
+        print(io, "constraint table(", x, ", [|")
+        for i in 1:size(set.table, 1)
+            print(io, " ", join(set.table[i, :], ", "), " |")
+        end
+        println(io, "]);")
+    end
+    return
+end
+
 _sense(s::MOI.LessThan) = " <= "
 _sense(s::MOI.GreaterThan) = " >= "
 _sense(s::MOI.EqualTo) = " = "
@@ -237,14 +307,24 @@ function _write_predicates(io, model)
     for (F, S) in MOI.get(model, MOI.ListOfConstraintTypesPresent())
         if S == MOI.AllDifferent
             println(io, "include \"alldifferent.mzn\";")
-        elseif S == MOI.Among
-            println(io, "include \"among.mzn\";")
+        elseif S <: MOI.BinPacking
+            println(io, "include \"bin_packing.mzn\";")
+        elseif S == MOI.Circuit
+            println(io, "include \"circuit.mzn\";")
         elseif S == MOI.CountAtLeast
             println(io, "include \"at_least.mzn\";")
+        elseif S == MOI.CountBelongs
+            println(io, "include \"among.mzn\";")
         elseif S == MOI.CountDistinct
             println(io, "include \"nvalue.mzn\";")
         elseif S == MOI.CountGreaterThan
             println(io, "include \"count_gt.mzn\";")
+        elseif S == MOI.Cumulative
+            println(io, "include \"cumulative.mzn\";")
+        elseif S == MOI.Path
+            println(io, "include \"path.mzn\";")
+        elseif S <: MOI.Table
+            println(io, "include \"table.mzn\";")
         end
     end
     return

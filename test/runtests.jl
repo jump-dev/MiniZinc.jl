@@ -4,7 +4,7 @@
 # in the LICENSE.md file or at https://opensource.org/licenses/MIT.
 
 import Pkg
-Pkg.pkg"add MathOptInterface#od/cpsat-countgt"
+Pkg.pkg"add MathOptInterface#od/cpsat-among"
 
 module TestMiniZinc
 
@@ -41,7 +41,8 @@ function test_write_bool_false()
     x, _ = MOI.add_constrained_variable(model, MOI.ZeroOne())
     MOI.add_constraint(model, x, MOI.EqualTo(0))
     @test sprint(write, model) == """
-    var bool: x1 = false;
+    var bool: x1;
+    constraint bool_eq(x1, false);
     solve satisfy;
     """
     return
@@ -52,7 +53,8 @@ function test_write_bool_true()
     x, _ = MOI.add_constrained_variable(model, MOI.ZeroOne())
     MOI.add_constraint(model, x, MOI.EqualTo(1))
     @test sprint(write, model) == """
-    var bool: x1 = true;
+    var bool: x1;
+    constraint bool_eq(x1, true);
     solve satisfy;
     """
     return
@@ -87,7 +89,7 @@ function test_write_greaterthan()
     MOI.add_constraint(model, x, MOI.GreaterThan(1))
     @test sprint(write, model) == """
     var int: x1;
-    constraint int_gt(x1, 1);
+    constraint int_ge(x1, 1);
     solve satisfy;
     """
     return
@@ -99,7 +101,7 @@ function test_write_lessthan()
     MOI.add_constraint(model, x, MOI.LessThan(2))
     @test sprint(write, model) == """
     var int: x1;
-    constraint int_lt(x1, 2);
+    constraint int_le(x1, 2);
     solve satisfy;
     """
     return
@@ -110,7 +112,7 @@ function test_write_equalto()
     x, _ = MOI.add_constrained_variable(model, MOI.Integer())
     MOI.add_constraint(model, x, MOI.EqualTo(2))
     @test sprint(write, model) == """
-    var int: x1 = 2;
+    var 2 .. 2: x1;
     solve satisfy;
     """
     return
@@ -168,7 +170,7 @@ function test_write_float_equalto()
     x = MOI.add_variable(model)
     MOI.add_constraint(model, x, MOI.EqualTo(2.0))
     @test sprint(write, model) == """
-    var float: x1 = 2.0;
+    var 2.0 .. 2.0: x1;
     solve satisfy;
     """
     return
@@ -338,14 +340,18 @@ function test_write_countdistinct()
     return
 end
 
-function test_write_among()
+function test_write_countbelongs()
     model = MiniZinc.Model{Int}()
     x = [MOI.add_constrained_variable(model, MOI.Integer())[1] for _ in 1:4]
     for i in 1:4
         MOI.set(model, MOI.VariableName(), x[i], "x$i")
     end
     set = Set([3, 4])
-    MOI.add_constraint(model, MOI.VectorOfVariables(x), MOI.Among(4, set))
+    MOI.add_constraint(
+        model,
+        MOI.VectorOfVariables(x),
+        MOI.CountBelongs(4, set),
+    )
     @test sprint(write, model) == """
     include "among.mzn";
     var int: x1;
@@ -408,6 +414,141 @@ function test_write_countgreaterthan()
     var int: x2;
     var int: x3;
     constraint count_gt([x1, x2, x3], y, c);
+    solve satisfy;
+    """
+    return
+end
+
+function test_write_binpacking()
+    model = MiniZinc.Model{Int}()
+    x = [MOI.add_constrained_variable(model, MOI.Integer())[1] for _ in 1:2]
+    MOI.add_constraint(
+        model,
+        MOI.VectorOfVariables(x),
+        MOI.BinPacking(2, [3, 4]),
+    )
+    MOI.set(model, MOI.VariableName(), x[1], "x1")
+    MOI.set(model, MOI.VariableName(), x[2], "x2")
+    @test sprint(write, model) == """
+    include "bin_packing.mzn";
+    var int: x1;
+    var int: x2;
+    constraint bin_packing(2, [x1, x2], [3, 4]);
+    solve satisfy;
+    """
+    return
+end
+
+function test_write_path()
+    model = MiniZinc.Model{Int}()
+    from = [1, 1, 2, 2, 3]
+    to = [2, 3, 3, 4, 4]
+    s, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    t, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    N, E = 4, 5
+    ns = MOI.add_variables(model, N)
+    MOI.add_constraint.(model, ns, MOI.ZeroOne())
+    es = MOI.add_variables(model, E)
+    MOI.add_constraint.(model, es, MOI.ZeroOne())
+    MOI.add_constraint(
+        model,
+        MOI.VectorOfVariables([s; t; ns; es]),
+        MOI.Path(from, to),
+    )
+    MOI.set(model, MOI.VariableName(), s, "s")
+    MOI.set(model, MOI.VariableName(), t, "t")
+    for i in 1:N
+        MOI.set(model, MOI.VariableName(), ns[i], "ns$i")
+    end
+    for i in 1:E
+        MOI.set(model, MOI.VariableName(), es[i], "es$i")
+    end
+    @test sprint(write, model) == """
+    include "path.mzn";
+    var int: s;
+    var int: t;
+    var bool: ns1;
+    var bool: ns2;
+    var bool: ns3;
+    var bool: ns4;
+    var bool: es1;
+    var bool: es2;
+    var bool: es3;
+    var bool: es4;
+    var bool: es5;
+    constraint path(4, 5, [1, 1, 2, 2, 3], [2, 3, 3, 4, 4], s, t, [ns1, ns2, ns3, ns4], [es1, es2, es3, es4, es5]);
+    solve satisfy;
+    """
+    return
+end
+
+function test_write_cumulative()
+    model = MiniZinc.Model{Int}()
+    s = [MOI.add_constrained_variable(model, MOI.Integer())[1] for _ in 1:3]
+    d = [MOI.add_constrained_variable(model, MOI.Integer())[1] for _ in 1:3]
+    r = [MOI.add_constrained_variable(model, MOI.Integer())[1] for _ in 1:3]
+    b, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.add_constraint(
+        model,
+        MOI.VectorOfVariables([s; d; r; b]),
+        MOI.Cumulative(10),
+    )
+    MOI.set(model, MOI.VariableName(), b, "b")
+    for i in 1:3
+        MOI.set(model, MOI.VariableName(), s[i], "s$i")
+        MOI.set(model, MOI.VariableName(), d[i], "d$i")
+        MOI.set(model, MOI.VariableName(), r[i], "r$i")
+    end
+    @test sprint(write, model) == """
+    include "cumulative.mzn";
+    var int: s1;
+    var int: s2;
+    var int: s3;
+    var int: d1;
+    var int: d2;
+    var int: d3;
+    var int: r1;
+    var int: r2;
+    var int: r3;
+    var int: b;
+    constraint cumulative([s1, s2, s3], [d1, d2, d3], [r1, r2, r3], b);
+    solve satisfy;
+    """
+    return
+end
+
+function test_write_table()
+    model = MiniZinc.Model{Int}()
+    x = [MOI.add_constrained_variable(model, MOI.Integer())[1] for _ in 1:3]
+    table = [1 1 0; 0 1 1]
+    MOI.add_constraint(model, MOI.VectorOfVariables(x), MOI.Table(table))
+    for i in 1:3
+        MOI.set(model, MOI.VariableName(), x[i], "x$i")
+    end
+    @test sprint(write, model) == """
+    include "table.mzn";
+    var int: x1;
+    var int: x2;
+    var int: x3;
+    constraint table([x1, x2, x3], [| 1, 1, 0 | 0, 1, 1 |]);
+    solve satisfy;
+    """
+    return
+end
+
+function test_write_circuit()
+    model = MiniZinc.Model{Int}()
+    x = [MOI.add_constrained_variable(model, MOI.Integer())[1] for _ in 1:3]
+    MOI.add_constraint(model, MOI.VectorOfVariables(x), MOI.Circuit(3))
+    for i in 1:3
+        MOI.set(model, MOI.VariableName(), x[i], "x$i")
+    end
+    @test sprint(write, model) == """
+    include "circuit.mzn";
+    var int: x1;
+    var int: x2;
+    var int: x3;
+    constraint circuit([x1, x2, x3]);
     solve satisfy;
     """
     return
@@ -539,107 +680,6 @@ function test_moi_int_lin()
     return
 end
 
-function test_moi_all_different()
-    model = MOI.Utilities.Model{Int}()
-    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
-    MOI.add_constraint(model, x, MOI.Interval(1, 3))
-    y, _ = MOI.add_constrained_variable(model, MOI.Integer())
-    MOI.add_constraint(model, y, MOI.Interval(1, 3))
-    z, _ = MOI.add_constrained_variable(model, MOI.Integer())
-    MOI.add_constraint(model, z, MOI.Interval(1, 3))
-    MOI.add_constraint(
-        model,
-        MOI.VectorOfVariables([x, y, z]),
-        MOI.AllDifferent(3),
-    )
-    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
-    index_map, _ = MOI.optimize!(solver, model)
-    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
-    @test MOI.get(solver, MOI.ResultCount()) >= 1
-    v = [
-        MOI.get(solver, MOI.VariablePrimal(), index_map[xi]) for xi in [x, y, z]
-    ]
-    @test v[1] != v[2] && v[2] != v[3] && v[1] != v[3]
-    return
-end
-
-function test_moi_countdistinct()
-    model = MOI.Utilities.Model{Int}()
-    y = [MOI.add_constrained_variable(model, MOI.Integer()) for _ in 1:4]
-    x = first.(y)
-    MOI.add_constraint.(model, x, MOI.Interval(1, 4))
-    MOI.add_constraint(model, MOI.VectorOfVariables(x), MOI.CountDistinct(4))
-    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
-    index_map, _ = MOI.optimize!(solver, model)
-    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
-    @test MOI.get(solver, MOI.ResultCount()) >= 1
-    x_val = round.(Int, MOI.get.(solver, MOI.VariablePrimal(), x))
-    @test length(unique(x_val[2:end])) == x_val[1]
-    return
-end
-
-function test_moi_among()
-    model = MOI.Utilities.Model{Int}()
-    y = [MOI.add_constrained_variable(model, MOI.Integer()) for _ in 1:4]
-    x = first.(y)
-    set = Set([3, 4])
-    MOI.add_constraint(model, MOI.VectorOfVariables(x), MOI.Among(4, set))
-    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
-    index_map, _ = MOI.optimize!(solver, model)
-    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
-    @test MOI.get(solver, MOI.ResultCount()) >= 1
-    x_val = round.(Int, MOI.get.(solver, MOI.VariablePrimal(), x))
-    @test x_val[1] == sum(x_val[i] in set for i in 2:length(x))
-    return
-end
-
-function test_moi_countatleast()
-    model = MOI.Utilities.Model{Int}()
-    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
-    y, _ = MOI.add_constrained_variable(model, MOI.Integer())
-    z, _ = MOI.add_constrained_variable(model, MOI.Integer())
-    MOI.add_constraint.(model, [x, y, z], MOI.Interval(0, 4))
-    variables = [x, y, y, z]
-    partitions = [2, 2]
-    set = Set([3])
-    MOI.add_constraint(
-        model,
-        MOI.VectorOfVariables(variables),
-        MOI.CountAtLeast(1, partitions, set),
-    )
-    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
-    index_map, _ = MOI.optimize!(solver, model)
-    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
-    @test MOI.get(solver, MOI.ResultCount()) >= 1
-    x_val = round(Int, MOI.get(solver, MOI.VariablePrimal(), index_map[x]))
-    y_val = round(Int, MOI.get(solver, MOI.VariablePrimal(), index_map[y]))
-    z_val = round.(Int, MOI.get.(solver, MOI.VariablePrimal(), index_map[z]))
-    @test x_val == 3 || y_val == 3
-    @test y_val == 3 || z_val == 3
-    return
-end
-
-function test_moi_countgreaterthan()
-    model = MOI.Utilities.Model{Int}()
-    c, _ = MOI.add_constrained_variable(model, MOI.Integer())
-    y, _ = MOI.add_constrained_variable(model, MOI.Integer())
-    x = [MOI.add_constrained_variable(model, MOI.Integer())[1] for _ in 1:3]
-    MOI.add_constraint(
-        model,
-        MOI.VectorOfVariables([c; y; x]),
-        MOI.CountGreaterThan(5),
-    )
-    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
-    index_map, _ = MOI.optimize!(solver, model)
-    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
-    @test MOI.get(solver, MOI.ResultCount()) >= 1
-    c_val = round(Int, MOI.get(solver, MOI.VariablePrimal(), c))
-    y_val = round(Int, MOI.get(solver, MOI.VariablePrimal(), y))
-    x_val = round.(Int, MOI.get.(solver, MOI.VariablePrimal(), x))
-    @test c_val > sum(x_val[i] == y_val for i in 1:length(x))
-    return
-end
-
 function test_moi_send_more_money()
     model = MOI.Utilities.Model{Int}()
     S, _ = MOI.add_constrained_variable(model, MOI.Interval(1, 9))
@@ -667,6 +707,24 @@ function test_moi_send_more_money()
     more = 1_000 * v[5] + 100 * v[6] + 10 * v[7] + v[2]
     money = 10_000 * v[5] + 1_000 * v[6] + 100 * v[3] + 10 * v[2] + v[8]
     @test send + more == money
+    return
+end
+
+function test_moi_tests()
+    model = MOI.Utilities.CachingOptimizer(
+        MOI.Utilities.Model{Int}(),
+        MiniZinc.Optimizer{Int}(MiniZinc.Chuffed()),
+    )
+    MOI.Test.runtests(
+        model,
+        MOI.Test.Config(Int),
+        include = String["test_cpsat_"],
+        exclude = String[
+            # Chuffed gets wrong answer
+            "test_cpsat_BinPacking",
+            "test_cpsat_Path",
+        ]
+    )
     return
 end
 

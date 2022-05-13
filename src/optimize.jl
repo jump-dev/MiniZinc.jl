@@ -83,6 +83,16 @@ function MOI.supports(model::Optimizer, attr::MOI.AbstractModelAttribute)
     return MOI.supports(model.inner, attr)
 end
 
+function _parse_result(::Type{T}, s::AbstractString) where {T}
+    if s == "true"
+        return T(1)
+    elseif s == "false"
+        return T(0)
+    else
+        return tryparse(T, s)
+    end
+end
+
 function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     MOI.empty!(dest.inner)
     empty!(dest.primal_solution)
@@ -100,7 +110,7 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
             m = match(r"(.+) \= (.+)\;", line)
             if m !== nothing
                 x = variable_map[m[1]]
-                dest.primal_solution[x] = tryparse(T, m[2])
+                dest.primal_solution[x] = _parse_result(T, m[2])
             end
         end
     end
