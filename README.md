@@ -19,6 +19,10 @@ Install MiniZinc.jl using the Julia package manager:
 import Pkg
 Pkg.add("https://github.com/jump-dev/MiniZinc.jl")
 ```
+You also need a branch of MOI
+```julia
+Pkg.add(Pkg.PackageSpec(name = "MathOptInterface", rev = "od/cpsat-alldifferent"))
+```
 
 **macOS and Windows**
 
