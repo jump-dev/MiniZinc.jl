@@ -4,7 +4,7 @@
 # in the LICENSE.md file or at https://opensource.org/licenses/MIT.
 
 import Pkg
-Pkg.pkg"add MathOptInterface#od/cpsat-alldifferent"
+Pkg.pkg"add MathOptInterface#master"
 
 module TestMiniZinc
 
