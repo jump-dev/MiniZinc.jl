@@ -33,7 +33,11 @@ end
 function _minizinc_exe(f::F) where {F}
     user_dir = get(ENV, "JULIA_LIBMINIZINC_DIR", nothing)
     if user_dir !== nothing
-        return f(joinpath(user_dir, "bin/minizinc"))
+        if isfile(joinpath(user_dir, "bin/minizinc"))
+            return f(joinpath(user_dir, "bin/minizinc"))
+        else
+            return f(joinpath(user_dir, "minizinc"))
+        end
     elseif Sys.islinux()
         return MiniZinc_jll.minizinc(f)
     end

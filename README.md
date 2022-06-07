@@ -1,5 +1,5 @@
 **Warning: this package is still under active development and requires a non-released
-branch of MathOptInterface to function. It is not intended for use (yet).**
+version of MathOptInterface to function. It is not intended for use (yet).**
 
 # MiniZinc.jl
 
@@ -17,11 +17,8 @@ MiniZinc project.*
 Install MiniZinc.jl using the Julia package manager:
 ```julia
 import Pkg
-Pkg.add("https://github.com/jump-dev/MiniZinc.jl")
-```
-You also need a branch of MOI
-```julia
-Pkg.add(Pkg.PackageSpec(name = "MathOptInterface", rev = "od/cpsat-alldifferent"))
+Pkg.pkg"add https://github.com/jump-dev/MiniZinc.jl"
+Pkg.pkg"add MathOptInterface#master"
 ```
 
 **macOS and Windows**
@@ -33,11 +30,9 @@ MiniZinc.jl, you'll need to manually install a copy of `libminizinc` from
 [MiniZinc/libminizinc](https://github.com/MiniZinc/libminizinc).
 
 To teach MiniZinc.jl where to look for `libminizinc`, set the
-`JULIA_LIBMINIZINC_DIR` environment variable.
-
-For example, I compiled `libminizinc` to:
+`JULIA_LIBMINIZINC_DIR` environment variable. For example:
 ```julia
-ENV["JULIA_LIBMINIZINC_DIR"] = "/Users/Oscar/Documents/Code/libminizinc/build/install"
+ENV["JULIA_LIBMINIZINC_DIR"] = "/Applications/MiniZincIDE.app/Contents/Resources"
 ```
 
 ## Use with MathOptInterface
@@ -47,14 +42,16 @@ import MiniZinc
 const MOI = MiniZinc.MOI
 # If on macOS or Windows, uncomment and change path:
 # ENV["JULIA_LIBMINIZINC_DIR"] = "/path/to/libminizinc"
-model = MiniZinc.Model{Int}()
+model = MOI.Utilities.CachingOptimizer(
+    MiniZinc.Model{Int}(),
+    MiniZinc.Optimizer{Int}(MiniZinc.Chuffed()),
+)
 x = MOI.add_variables(model, 3)
 MOI.add_constraint.(model, x, MOI.Interval(1, 3))
 MOI.add_constraint.(model, x, MOI.Integer())
 MOI.add_constraint(model, MOI.VectorOfVariables(x), MOI.AllDifferent(3))
-optimizer = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
-MOI.optimize!(optimizer, model)
-@show MOI.get(optimizer, MOI.VariablePrimal(), x)
+MOI.optimize!(model)
+@show MOI.get(model, MOI.VariablePrimal(), x)
 ```
 
 ## Use with JuMP
