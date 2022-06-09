@@ -1,6 +1,3 @@
-**Warning: this package is still under active development and requires a non-released
-version of MathOptInterface to function. It is not intended for use (yet).**
-
 # MiniZinc.jl
 
 `MiniZinc.jl` is a wrapper for the [MiniZinc](https://www.minizinc.org)
@@ -18,7 +15,6 @@ Install MiniZinc.jl using the Julia package manager:
 ```julia
 import Pkg
 Pkg.pkg"add https://github.com/jump-dev/MiniZinc.jl"
-Pkg.pkg"add MathOptInterface#master"
 ```
 
 **macOS and Windows**
