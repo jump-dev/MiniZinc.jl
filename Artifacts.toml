@@ -1,0 +1,9 @@
+[minizinc]
+git-tree-sha1 = "651dd7526ee64ca01c52c9f4aec3183657321b4e"
+arch = "x86_64"
+os = "macos"
+lazy = true
+
+    [[minizinc.download]]
+    url = "https://github.com/jump-dev/MiniZinc.jl/files/8913949/MiniZinc.x86_64-apple-darwin.tar.gz"
+    sha256 = "af0a89b2b3dcd6996c6bd706e9cf44bcaa4fc0bbcc8414bad977ed809118392a"

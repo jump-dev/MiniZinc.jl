@@ -6,7 +6,15 @@
 module MiniZinc
 
 import Chuffed_jll
+import LazyArtifacts
 import MiniZinc_jll
+
+function __init__()
+    if !(Sys.islinux() || Sys.isapple())
+        error("Unsupported platform")
+    end
+    return
+end
 
 import MathOptInterface
 const MOI = MathOptInterface
