@@ -14,13 +14,13 @@ MiniZinc project.*
 Install MiniZinc.jl using the Julia package manager:
 ```julia
 import Pkg
-Pkg.pkg"add https://github.com/jump-dev/MiniZinc.jl"
+Pkg.add("MiniZinc")
 ```
 
-**macOS and Windows**
+**Windows**
 
-On Linux, this package automatically installs `libminizinc`. However, we're
-still working out problems with the install on macOS and Windows. To use
+On Linux and macOS, this package automatically installs `libminizinc`. However,
+we're still working out problems with the install on Windows. To use
 MiniZinc.jl, you'll need to manually install a copy of `libminizinc` from
 [minizinc.org](https://www.minizinc.org) or compile one yourself from
 [MiniZinc/libminizinc](https://github.com/MiniZinc/libminizinc).
@@ -28,7 +28,7 @@ MiniZinc.jl, you'll need to manually install a copy of `libminizinc` from
 To teach MiniZinc.jl where to look for `libminizinc`, set the
 `JULIA_LIBMINIZINC_DIR` environment variable. For example:
 ```julia
-ENV["JULIA_LIBMINIZINC_DIR"] = "/Applications/MiniZincIDE.app/Contents/Resources"
+ENV["JULIA_LIBMINIZINC_DIR"] = "C:\\Program Files\\MiniZinc"
 ```
 
 ## Use with MathOptInterface
@@ -36,8 +36,6 @@ ENV["JULIA_LIBMINIZINC_DIR"] = "/Applications/MiniZincIDE.app/Contents/Resources
 ```julia
 import MiniZinc
 const MOI = MiniZinc.MOI
-# If on macOS or Windows, uncomment and change path:
-# ENV["JULIA_LIBMINIZINC_DIR"] = "/path/to/libminizinc"
 model = MOI.Utilities.CachingOptimizer(
     MiniZinc.Model{Int}(),
     MiniZinc.Optimizer{Int}(MiniZinc.Chuffed()),
@@ -52,12 +50,11 @@ MOI.optimize!(model)
 
 ## Use with JuMP
 
-You can also call MiniZinc from JuMP, using any solver that `libminizinc` supports:
+You can also call MiniZinc from JuMP, using any solver that `libminizinc`
+supports:
 ```julia
 using JuMP
 import MiniZinc
-# If on macOS or Windows, uncomment and change path:
-# ENV["JULIA_LIBMINIZINC_DIR"] = "/path/to/libminizinc"
 model = Model(() -> MiniZinc.Optimizer{Float64}("gurobi"))
 @variable(model, 1 <= x[1:3] <= 3, Int)
 @constraint(model, x in MOI.AllDifferent(3))
