@@ -143,6 +143,24 @@ function _write_constraint(
     return
 end
 
+function _write_constraint(
+    io::IO,
+    model,
+    variables,
+    F::Type{MOI.VectorOfVariables},
+    S::Type{Reified{S2}},
+) where {S2<:Union{MOI.AllDifferent,MOI.CountDistinct,MOI.CountGreaterThan}}
+    for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
+        f = MOI.get(model, MOI.ConstraintFunction(), ci)
+        s = MOI.get(model, MOI.ConstraintSet(), ci)
+        mzn = MiniZincSet(s.set)
+        z = _to_string(variables, f.variables[1])
+        strs = [_to_string(variables, f.variables[i.+1]) for i in mzn.fields]
+        println(io, "constraint $z <-> $(mzn.name)(", join(strs, ", "), ");")
+    end
+    return
+end
+
 function MiniZincSet(set::MOI.AllDifferent)
     return MiniZincSet("alldifferent", [1:set.dimension])
 end
@@ -188,36 +206,77 @@ function _write_constraint(
     model,
     variables,
     F::Type{MOI.VectorOfVariables},
+    S::Type{Reified{MOI.CountBelongs}},
+)
+    for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
+        f = MOI.get(model, MOI.ConstraintFunction(), ci)
+        s = MOI.get(model, MOI.ConstraintSet(), ci).set
+        b = _to_string(variables, f.variables[1])
+        n = _to_string(variables, f.variables[2])
+        x = _to_string(variables, f.variables[3:end])
+        v = string("{", join(sort([i for i in s.set]), ", "), "}")
+        println(io, "constraint $b <-> among(", n, ", ", x, ", ", v, ");")
+    end
+    return
+end
+
+function _write_at_least(io, variables, f, s, offset)
+    print(io, "at_least(", s.n, ", [")
+    prefix = ""
+    for p in s.partitions
+        print(io, prefix, "{")
+        inner_prefix = ""
+        for i in 1:p
+            print(
+                io,
+                inner_prefix,
+                _to_string(variables, f.variables[offset+i]),
+            )
+            inner_prefix = ", "
+        end
+        print(io, "}")
+        offset += p
+        prefix = ", "
+    end
+    prefix = ""
+    print(io, "], {")
+    for i in sort([i for i in s.set])
+        print(io, prefix, i)
+        prefix = ", "
+    end
+    println(io, "});")
+    return
+end
+
+function _write_constraint(
+    io::IO,
+    model,
+    variables,
+    F::Type{MOI.VectorOfVariables},
     S::Type{MOI.CountAtLeast},
 )
     for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
         f = MOI.get(model, MOI.ConstraintFunction(), ci)
         s = MOI.get(model, MOI.ConstraintSet(), ci)
-        offset = 0
-        print(io, "constraint at_least(", s.n, ", [")
-        prefix = ""
-        for p in s.partitions
-            print(io, prefix, "{")
-            inner_prefix = ""
-            for i in 1:p
-                print(
-                    io,
-                    inner_prefix,
-                    _to_string(variables, f.variables[offset+i]),
-                )
-                inner_prefix = ", "
-            end
-            print(io, "}")
-            offset += p
-            prefix = ", "
-        end
-        prefix = ""
-        print(io, "], {")
-        for i in sort([i for i in s.set])
-            print(io, prefix, i)
-            prefix = ", "
-        end
-        println(io, "});")
+        print(io, "constraint ")
+        _write_at_least(io, variables, f, s, 0)
+    end
+    return
+end
+
+function _write_constraint(
+    io::IO,
+    model,
+    variables,
+    F::Type{MOI.VectorOfVariables},
+    S::Type{Reified{MOI.CountAtLeast}},
+)
+    for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
+        f = MOI.get(model, MOI.ConstraintFunction(), ci)
+        s = MOI.get(model, MOI.ConstraintSet(), ci).set
+        b = _to_string(variables, f.variables[1])
+        print(io, "constraint $b <-> ")
+        _write_at_least(io, variables, f, s, 1)
     end
     return
 end
@@ -303,21 +362,45 @@ function _write_constraint(
     return
 end
 
+function _to_epigraph(variables, f::MOI.VectorAffineFunction)
+    @assert MOI.output_dimension(f) == 2
+    f_z, x = MOI.Utilities.eachscalar(f)
+    z = convert(MOI.VariableIndex, f_z)
+    return _to_string(variables, z), _to_string(variables, x)
+end
+
+function _write_constraint(
+    io::IO,
+    model::Model{T},
+    variables,
+    F::Type{MOI.VectorAffineFunction{T}},
+    S::Type{Reified{S2}},
+) where {T,S2<:Union{MOI.LessThan{T},MOI.GreaterThan{T},MOI.EqualTo{T}}}
+    for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
+        f = MOI.get(model, MOI.ConstraintFunction(), ci)
+        z, x = _to_epigraph(variables, f)
+        s = MOI.get(model, MOI.ConstraintSet(), ci).set
+        fx = string(x, _sense(s), _rhs(s) - f.constants[2])
+        println(io, "constraint $z <-> $fx;")
+    end
+    return
+end
+
 function _write_predicates(io, model)
     for (F, S) in MOI.get(model, MOI.ListOfConstraintTypesPresent())
-        if S == MOI.AllDifferent
+        if S == MOI.AllDifferent || S == Reified{MOI.AllDifferent}
             println(io, "include \"alldifferent.mzn\";")
         elseif S <: MOI.BinPacking
             println(io, "include \"bin_packing.mzn\";")
         elseif S == MOI.Circuit
             println(io, "include \"circuit.mzn\";")
-        elseif S == MOI.CountAtLeast
+        elseif S == MOI.CountAtLeast || S == Reified{MOI.CountAtLeast}
             println(io, "include \"at_least.mzn\";")
-        elseif S == MOI.CountBelongs
+        elseif S == MOI.CountBelongs || S == Reified{MOI.CountBelongs}
             println(io, "include \"among.mzn\";")
-        elseif S == MOI.CountDistinct
+        elseif S == MOI.CountDistinct || S == Reified{MOI.CountDistinct}
             println(io, "include \"nvalue.mzn\";")
-        elseif S == MOI.CountGreaterThan
+        elseif S == MOI.CountGreaterThan || S == Reified{MOI.CountGreaterThan}
             println(io, "include \"count_gt.mzn\";")
         elseif S == MOI.Cumulative
             println(io, "include \"cumulative.mzn\";")
