@@ -639,6 +639,29 @@ function test_write_binpacking()
     return
 end
 
+function test_write_binpacking_reified()
+    model = MiniZinc.Model{Int}()
+    x = [MOI.add_constrained_variable(model, MOI.Integer())[1] for _ in 1:2]
+    b, _ = MOI.add_constrained_variable(model, MOI.ZeroOne())
+    MOI.add_constraint(
+        model,
+        MOI.VectorOfVariables([b; x]),
+        MiniZinc.Reified(MOI.BinPacking(2, [3, 4])),
+    )
+    MOI.set(model, MOI.VariableName(), x[1], "x1")
+    MOI.set(model, MOI.VariableName(), x[2], "x2")
+    MOI.set(model, MOI.VariableName(), b, "b")
+    @test sprint(write, model) == """
+    include "bin_packing.mzn";
+    var int: x1;
+    var int: x2;
+    var bool: b;
+    constraint b <-> bin_packing(2, [x1, x2], [3, 4]);
+    solve satisfy;
+    """
+    return
+end
+
 function test_write_path()
     model = MiniZinc.Model{Int}()
     from = [1, 1, 2, 2, 3]

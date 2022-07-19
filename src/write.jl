@@ -303,6 +303,24 @@ function _write_constraint(
     model,
     variables,
     F::Type{MOI.VectorOfVariables},
+    S::Type{<:Reified{<:MOI.BinPacking}},
+)
+    for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
+        f = MOI.get(model, MOI.ConstraintFunction(), ci)
+        s = MOI.get(model, MOI.ConstraintSet(), ci).set
+        b = _to_string(variables, f.variables[1])
+        x = _to_string(variables, f.variables[2:end])
+        print(io, "constraint $b <-> bin_packing(", s.capacity, ", ", x, ", ")
+        println(io, s.weights, ");")
+    end
+    return
+end
+
+function _write_constraint(
+    io::IO,
+    model,
+    variables,
+    F::Type{MOI.VectorOfVariables},
     S::Type{MOI.Path},
 )
     for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
@@ -390,7 +408,7 @@ function _write_predicates(io, model)
     for (F, S) in MOI.get(model, MOI.ListOfConstraintTypesPresent())
         if S == MOI.AllDifferent || S == Reified{MOI.AllDifferent}
             println(io, "include \"alldifferent.mzn\";")
-        elseif S <: MOI.BinPacking
+        elseif S <: MOI.BinPacking  || S <: Reified{<:MOI.BinPacking}
             println(io, "include \"bin_packing.mzn\";")
         elseif S == MOI.Circuit
             println(io, "include \"circuit.mzn\";")

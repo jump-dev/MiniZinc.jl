@@ -29,6 +29,7 @@ Base.copy(s::Reified) = Reified(copy(s.set))
 const ReifiedLessThan{T} = Reified{MOI.LessThan{T}}
 const ReifiedGreaterThan{T} = Reified{MOI.GreaterThan{T}}
 const ReifiedEqualTo{T} = Reified{MOI.EqualTo{T}}
+const ReifiedBinPacking{T} = Reified{MOI.BinPacking{T}}
 
 MOI.Utilities.@model(
     Model,
@@ -52,6 +53,7 @@ MOI.Utilities.@model(
     (
         MOI.BinPacking,
         MOI.Table,
+        ReifiedBinPacking,
         ReifiedLessThan,
         ReifiedGreaterThan,
         ReifiedEqualTo,
