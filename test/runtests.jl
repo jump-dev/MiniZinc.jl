@@ -740,6 +740,44 @@ function test_write_cumulative()
     return
 end
 
+function test_write_cumulative_reified()
+    model = MiniZinc.Model{Int}()
+    s = [MOI.add_constrained_variable(model, MOI.Integer())[1] for _ in 1:3]
+    d = [MOI.add_constrained_variable(model, MOI.Integer())[1] for _ in 1:3]
+    r = [MOI.add_constrained_variable(model, MOI.Integer())[1] for _ in 1:3]
+    b, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    z, _ = MOI.add_constrained_variable(model, MOI.ZeroOne())
+    MOI.add_constraint(
+        model,
+        MOI.VectorOfVariables([z; s; d; r; b]),
+        MiniZinc.Reified(MOI.Cumulative(10)),
+    )
+    MOI.set(model, MOI.VariableName(), b, "b")
+    MOI.set(model, MOI.VariableName(), z, "z")
+    for i in 1:3
+        MOI.set(model, MOI.VariableName(), s[i], "s$i")
+        MOI.set(model, MOI.VariableName(), d[i], "d$i")
+        MOI.set(model, MOI.VariableName(), r[i], "r$i")
+    end
+    @test sprint(write, model) == """
+    include "cumulative.mzn";
+    var int: s1;
+    var int: s2;
+    var int: s3;
+    var int: d1;
+    var int: d2;
+    var int: d3;
+    var int: r1;
+    var int: r2;
+    var int: r3;
+    var int: b;
+    var bool: z;
+    constraint z <-> cumulative([s1, s2, s3], [d1, d2, d3], [r1, r2, r3], b);
+    solve satisfy;
+    """
+    return
+end
+
 function test_write_table()
     model = MiniZinc.Model{Int}()
     x = [MOI.add_constrained_variable(model, MOI.Integer())[1] for _ in 1:3]

@@ -149,7 +149,14 @@ function _write_constraint(
     variables,
     F::Type{MOI.VectorOfVariables},
     S::Type{Reified{S2}},
-) where {S2<:Union{MOI.AllDifferent,MOI.CountDistinct,MOI.CountGreaterThan}}
+) where {
+    S2<:Union{
+        MOI.AllDifferent,
+        MOI.CountDistinct,
+        MOI.CountGreaterThan,
+        MOI.Cumulative,
+    },
+}
     for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
         f = MOI.get(model, MOI.ConstraintFunction(), ci)
         s = MOI.get(model, MOI.ConstraintSet(), ci)
@@ -431,7 +438,7 @@ function _write_predicates(io, model)
             println(io, "include \"alldifferent.mzn\";")
         elseif S <: MOI.BinPacking || S <: Reified{<:MOI.BinPacking}
             println(io, "include \"bin_packing.mzn\";")
-        elseif S == MOI.Circuit
+        elseif S == MOI.Circuit  # Reified unsupported by MiniZinc
             println(io, "include \"circuit.mzn\";")
         elseif S == MOI.CountAtLeast || S == Reified{MOI.CountAtLeast}
             println(io, "include \"at_least.mzn\";")
@@ -441,9 +448,9 @@ function _write_predicates(io, model)
             println(io, "include \"nvalue.mzn\";")
         elseif S == MOI.CountGreaterThan || S == Reified{MOI.CountGreaterThan}
             println(io, "include \"count_gt.mzn\";")
-        elseif S == MOI.Cumulative
+        elseif S == MOI.Cumulative || S == Reified{MOI.Cumulative}
             println(io, "include \"cumulative.mzn\";")
-        elseif S == MOI.Path
+        elseif S == MOI.Path  # Reified unsupported by MiniZinc
             println(io, "include \"path.mzn\";")
         elseif S <: MOI.Table || S <: Reified{<:MOI.Table}
             println(io, "include \"table.mzn\";")

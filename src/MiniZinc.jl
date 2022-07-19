@@ -19,6 +19,12 @@ end
 import MathOptInterface
 const MOI = MathOptInterface
 
+"""
+    Reified(set::MOI.AbstractSet)
+
+The constraint ``[z; f(x)] \\in Reified(S)`` ensures that ``f(x) \\in S`` if and
+only if ``z == 1``, where ``z \\in \\{0, 1\\}``.
+"""
 struct Reified{S<:MOI.AbstractSet} <: MOI.AbstractVectorSet
     set::S
 end
@@ -46,10 +52,13 @@ MOI.Utilities.@model(
         MOI.Cumulative,
         MOI.Path,
         Reified{MOI.AllDifferent},
+        # Reified{MOI.Circuit}, Unsupported by MiniZinc
         Reified{MOI.CountAtLeast},
         Reified{MOI.CountBelongs},
         Reified{MOI.CountDistinct},
         Reified{MOI.CountGreaterThan},
+        Reified{MOI.Cumulative},
+        # Reified{MOI.Path}, Unsupported by MiniZinc
     ),
     (
         MOI.BinPacking,
