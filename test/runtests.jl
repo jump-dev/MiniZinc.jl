@@ -759,6 +759,32 @@ function test_write_table()
     return
 end
 
+function test_write_table_reified()
+    model = MiniZinc.Model{Int}()
+    x = [MOI.add_constrained_variable(model, MOI.Integer())[1] for _ in 1:3]
+    table = [1 1 0; 0 1 1]
+    b, _ = MOI.add_constrained_variable(model, MOI.ZeroOne())
+    MOI.set(model, MOI.VariableName(), b, "b")
+    MOI.add_constraint(
+        model,
+        MOI.VectorOfVariables([b; x]),
+        MiniZinc.Reified(MOI.Table(table)),
+    )
+    for i in 1:3
+        MOI.set(model, MOI.VariableName(), x[i], "x$i")
+    end
+    @test sprint(write, model) == """
+    include "table.mzn";
+    var int: x1;
+    var int: x2;
+    var int: x3;
+    var bool: b;
+    constraint b <-> table([x1, x2, x3], [| 1, 1, 0 | 0, 1, 1 |]);
+    solve satisfy;
+    """
+    return
+end
+
 function test_write_circuit()
     model = MiniZinc.Model{Int}()
     x = [MOI.add_constrained_variable(model, MOI.Integer())[1] for _ in 1:3]

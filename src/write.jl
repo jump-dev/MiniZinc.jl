@@ -356,6 +356,27 @@ function _write_constraint(
     return
 end
 
+function _write_constraint(
+    io::IO,
+    model,
+    variables,
+    F::Type{MOI.VectorOfVariables},
+    S::Type{<:Reified{<:MOI.Table}},
+)
+    for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
+        f = MOI.get(model, MOI.ConstraintFunction(), ci)
+        set = MOI.get(model, MOI.ConstraintSet(), ci).set
+        b = _to_string(variables, f.variables[1])
+        x = _to_string(variables, f.variables[2:end])
+        print(io, "constraint $b <-> table(", x, ", [|")
+        for i in 1:size(set.table, 1)
+            print(io, " ", join(set.table[i, :], ", "), " |")
+        end
+        println(io, "]);")
+    end
+    return
+end
+
 _sense(s::MOI.LessThan) = " <= "
 _sense(s::MOI.GreaterThan) = " >= "
 _sense(s::MOI.EqualTo) = " = "
@@ -408,7 +429,7 @@ function _write_predicates(io, model)
     for (F, S) in MOI.get(model, MOI.ListOfConstraintTypesPresent())
         if S == MOI.AllDifferent || S == Reified{MOI.AllDifferent}
             println(io, "include \"alldifferent.mzn\";")
-        elseif S <: MOI.BinPacking  || S <: Reified{<:MOI.BinPacking}
+        elseif S <: MOI.BinPacking || S <: Reified{<:MOI.BinPacking}
             println(io, "include \"bin_packing.mzn\";")
         elseif S == MOI.Circuit
             println(io, "include \"circuit.mzn\";")
@@ -424,7 +445,7 @@ function _write_predicates(io, model)
             println(io, "include \"cumulative.mzn\";")
         elseif S == MOI.Path
             println(io, "include \"path.mzn\";")
-        elseif S <: MOI.Table
+        elseif S <: MOI.Table || S <: Reified{<:MOI.Table}
             println(io, "include \"table.mzn\";")
         end
     end
