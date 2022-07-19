@@ -78,7 +78,7 @@ MOI.Utilities.@model(
 function MOI.supports_constraint(
     ::Model{T},
     ::Type{MOI.VectorAffineFunction{T}},
-    ::MOI.AbstractVectorSet,
+    ::Type{<:MOI.AbstractVectorSet},
 ) where {T}
     return false
 end

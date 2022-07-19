@@ -823,6 +823,22 @@ function test_write_table_reified()
     return
 end
 
+function test_model_unsupported_vectoraffine_constraint()
+    model = MiniZinc.Model{Int}()
+    x = MOI.add_variables(model, 2)
+    f = MOI.Utilities.operate(vcat, Int, x[1], 2 * x[2])
+    @test MOI.supports_constraint(model, typeof(f), MOI.AllDifferent) == false
+    set = MiniZinc.Reified(MOI.GreaterThan(1))
+    @test MOI.supports_constraint(model, typeof(f), typeof(set)) == true
+    return
+end
+
+function test_reified_dimension()
+    @test MOI.dimension(MiniZinc.Reified(MOI.GreaterThan(1))) == 2
+    @test MOI.dimension(MiniZinc.Reified(MOI.AllDifferent(2))) == 3
+    return
+end
+
 function test_write_circuit()
     model = MiniZinc.Model{Int}()
     x = [MOI.add_constrained_variable(model, MOI.Integer())[1] for _ in 1:3]
