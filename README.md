@@ -36,10 +36,6 @@ ENV["JULIA_LIBMINIZINC_DIR"] = "C:\\Program Files\\MiniZinc"
 MiniZinc.jl supports the [constraint programming sets](https://jump.dev/MathOptInterface.jl/stable/reference/standard_form/#Constraint-programming-sets)
 defined in MathOptInterface, as well as (in)equality constraints.
 
-In addition, MiniZinc.jl also supports the `MiniZinc.Reified(set)`
-set, which converts constraint programming sets into their reified
-counterparts.
-
 The following example solves the following constraint program:
 ```
 xᵢ ∈ {1, 2, 3} ∀i=1,2,3
@@ -69,16 +65,16 @@ julia> function main()
            MOI.add_constraint.(model, z, MOI.ZeroOne())
            # z₁ <-> x₁ != x₂
            MOI.add_constraint(
-               model, 
-               MOI.VectorOfVariables([z[1], x[1], x[2]]), 
+               model,
+               MOI.VectorOfVariables([z[1], x[1], x[2]]),
                MiniZinc.Reified(MOI.AllDifferent(2)),
            )
            # z₂ <-> x₂ != x₃
            MOI.add_constraint(
-               model, 
-               MOI.VectorOfVariables([z[2], x[2], x[3]]), 
+               model,
+               MOI.VectorOfVariables([z[2], x[2], x[3]]),
                MiniZinc.Reified(MOI.AllDifferent(2)),
-           )        
+           )
            # z₁ + z₂ = 1
            MOI.add_constraint(model, 1 * z[1] + x[2], MOI.EqualTo(1))
            MOI.optimize!(model)

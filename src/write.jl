@@ -148,7 +148,7 @@ function _write_constraint(
     model,
     variables,
     F::Type{MOI.VectorOfVariables},
-    S::Type{Reified{S2}},
+    S::Type{MOI.Reified{S2}},
 ) where {
     S2<:Union{
         MOI.AllDifferent,
@@ -213,7 +213,7 @@ function _write_constraint(
     model,
     variables,
     F::Type{MOI.VectorOfVariables},
-    S::Type{Reified{MOI.CountBelongs}},
+    S::Type{MOI.Reified{MOI.CountBelongs}},
 )
     for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
         f = MOI.get(model, MOI.ConstraintFunction(), ci)
@@ -276,7 +276,7 @@ function _write_constraint(
     model,
     variables,
     F::Type{MOI.VectorOfVariables},
-    S::Type{Reified{MOI.CountAtLeast}},
+    S::Type{MOI.Reified{MOI.CountAtLeast}},
 )
     for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
         f = MOI.get(model, MOI.ConstraintFunction(), ci)
@@ -310,7 +310,7 @@ function _write_constraint(
     model,
     variables,
     F::Type{MOI.VectorOfVariables},
-    S::Type{<:Reified{<:MOI.BinPacking}},
+    S::Type{<:MOI.Reified{<:MOI.BinPacking}},
 )
     for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
         f = MOI.get(model, MOI.ConstraintFunction(), ci)
@@ -368,7 +368,7 @@ function _write_constraint(
     model,
     variables,
     F::Type{MOI.VectorOfVariables},
-    S::Type{<:Reified{<:MOI.Table}},
+    S::Type{<:MOI.Reified{<:MOI.Table}},
 )
     for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
         f = MOI.get(model, MOI.ConstraintFunction(), ci)
@@ -420,7 +420,7 @@ function _write_constraint(
     model::Model{T},
     variables,
     F::Type{MOI.VectorAffineFunction{T}},
-    S::Type{Reified{S2}},
+    S::Type{MOI.Reified{S2}},
 ) where {T,S2<:Union{MOI.LessThan{T},MOI.GreaterThan{T},MOI.EqualTo{T}}}
     for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
         f = MOI.get(model, MOI.ConstraintFunction(), ci)
@@ -434,25 +434,26 @@ end
 
 function _write_predicates(io, model)
     for (F, S) in MOI.get(model, MOI.ListOfConstraintTypesPresent())
-        if S == MOI.AllDifferent || S == Reified{MOI.AllDifferent}
+        if S == MOI.AllDifferent || S == MOI.Reified{MOI.AllDifferent}
             println(io, "include \"alldifferent.mzn\";")
-        elseif S <: MOI.BinPacking || S <: Reified{<:MOI.BinPacking}
+        elseif S <: MOI.BinPacking || S <: MOI.Reified{<:MOI.BinPacking}
             println(io, "include \"bin_packing.mzn\";")
         elseif S == MOI.Circuit  # Reified unsupported by MiniZinc
             println(io, "include \"circuit.mzn\";")
-        elseif S == MOI.CountAtLeast || S == Reified{MOI.CountAtLeast}
+        elseif S == MOI.CountAtLeast || S == MOI.Reified{MOI.CountAtLeast}
             println(io, "include \"at_least.mzn\";")
-        elseif S == MOI.CountBelongs || S == Reified{MOI.CountBelongs}
+        elseif S == MOI.CountBelongs || S == MOI.Reified{MOI.CountBelongs}
             println(io, "include \"among.mzn\";")
-        elseif S == MOI.CountDistinct || S == Reified{MOI.CountDistinct}
+        elseif S == MOI.CountDistinct || S == MOI.Reified{MOI.CountDistinct}
             println(io, "include \"nvalue.mzn\";")
-        elseif S == MOI.CountGreaterThan || S == Reified{MOI.CountGreaterThan}
+        elseif S == MOI.CountGreaterThan ||
+               S == MOI.Reified{MOI.CountGreaterThan}
             println(io, "include \"count_gt.mzn\";")
-        elseif S == MOI.Cumulative || S == Reified{MOI.Cumulative}
+        elseif S == MOI.Cumulative || S == MOI.Reified{MOI.Cumulative}
             println(io, "include \"cumulative.mzn\";")
         elseif S == MOI.Path  # Reified unsupported by MiniZinc
             println(io, "include \"path.mzn\";")
-        elseif S <: MOI.Table || S <: Reified{<:MOI.Table}
+        elseif S <: MOI.Table || S <: MOI.Reified{<:MOI.Table}
             println(io, "include \"table.mzn\";")
         end
     end

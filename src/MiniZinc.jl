@@ -12,24 +12,11 @@ import MiniZinc_jll
 
 const MOI = MathOptInterface
 
-"""
-    Reified(set::MOI.AbstractSet)
-
-The constraint ``[z; f(x)] \\in Reified(S)`` ensures that ``f(x) \\in S`` if and
-only if ``z == 1``, where ``z \\in \\{0, 1\\}``.
-"""
-struct Reified{S<:MOI.AbstractSet} <: MOI.AbstractVectorSet
-    set::S
-end
-
-MOI.dimension(s::Reified) = 1 + MOI.dimension(s.set)
-Base.copy(s::Reified) = Reified(copy(s.set))
-
-const ReifiedLessThan{T} = Reified{MOI.LessThan{T}}
-const ReifiedGreaterThan{T} = Reified{MOI.GreaterThan{T}}
-const ReifiedEqualTo{T} = Reified{MOI.EqualTo{T}}
-const ReifiedBinPacking{T} = Reified{MOI.BinPacking{T}}
-const ReifiedTable{T} = Reified{MOI.Table{T}}
+const ReifiedLessThan{T} = MOI.Reified{MOI.LessThan{T}}
+const ReifiedGreaterThan{T} = MOI.Reified{MOI.GreaterThan{T}}
+const ReifiedEqualTo{T} = MOI.Reified{MOI.EqualTo{T}}
+const ReifiedBinPacking{T} = MOI.Reified{MOI.BinPacking{T}}
+const ReifiedTable{T} = MOI.Reified{MOI.Table{T}}
 
 MOI.Utilities.@model(
     Model,
@@ -44,14 +31,14 @@ MOI.Utilities.@model(
         MOI.CountGreaterThan,
         MOI.Cumulative,
         MOI.Path,
-        Reified{MOI.AllDifferent},
-        # Reified{MOI.Circuit}, Unsupported by MiniZinc
-        Reified{MOI.CountAtLeast},
-        Reified{MOI.CountBelongs},
-        Reified{MOI.CountDistinct},
-        Reified{MOI.CountGreaterThan},
-        Reified{MOI.Cumulative},
-        # Reified{MOI.Path}, Unsupported by MiniZinc
+        MOI.Reified{MOI.AllDifferent},
+        # MOI.Reified{MOI.Circuit}, Unsupported by MiniZinc
+        MOI.Reified{MOI.CountAtLeast},
+        MOI.Reified{MOI.CountBelongs},
+        MOI.Reified{MOI.CountDistinct},
+        MOI.Reified{MOI.CountGreaterThan},
+        MOI.Reified{MOI.Cumulative},
+        # MOI.Reified{MOI.Path}, Unsupported by MiniZinc
     ),
     (
         MOI.BinPacking,
