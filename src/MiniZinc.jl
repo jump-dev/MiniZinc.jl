@@ -66,7 +66,7 @@ end
 function MOI.supports_constraint(
     ::Model{T},
     ::Type{MOI.VectorAffineFunction{T}},
-    ::Type{Reified{S}},
+    ::Type{MOI.Reified{S}},
 ) where {T,S<:Union{MOI.LessThan{T},MOI.GreaterThan{T},MOI.EqualTo{T}}}
     return true
 end
