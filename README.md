@@ -95,7 +95,7 @@ julia> main()
 ## Use with JuMP
 
 You can also call MiniZinc from JuMP, using any solver that `libminizinc`
-supports:
+supports. For example, if you have Gurobi installed:
 ```julia
 using JuMP
 import MiniZinc
