@@ -211,7 +211,7 @@ function test_write_linear_eq_reified()
     z, _ = MOI.add_constrained_variable(model, MOI.ZeroOne())
     MOI.set(model, MOI.VariableName(), z, "z")
     f = MOI.Utilities.operate(vcat, Int, z, 1 * x + 2 * y + 4)
-    MOI.add_constraint(model, f, MiniZinc.Reified(MOI.EqualTo(3)))
+    MOI.add_constraint(model, f, MOI.Reified(MOI.EqualTo(3)))
     @test sprint(write, model) == """
     var int: x;
     var int: y;
@@ -248,7 +248,7 @@ function test_write_linear_lt_reified()
     z, _ = MOI.add_constrained_variable(model, MOI.ZeroOne())
     MOI.set(model, MOI.VariableName(), z, "z")
     f = MOI.Utilities.operate(vcat, Int, z, 1 * x + 2 * y + 4)
-    MOI.add_constraint(model, f, MiniZinc.Reified(MOI.LessThan(3)))
+    MOI.add_constraint(model, f, MOI.Reified(MOI.LessThan(3)))
     @test sprint(write, model) == """
     var int: x;
     var int: y;
@@ -285,7 +285,7 @@ function test_write_linear_gt_reified()
     z, _ = MOI.add_constrained_variable(model, MOI.ZeroOne())
     MOI.set(model, MOI.VariableName(), z, "z")
     f = MOI.Utilities.operate(vcat, Int, z, 1 * x + 2 * y + 4)
-    MOI.add_constraint(model, f, MiniZinc.Reified(MOI.GreaterThan(3)))
+    MOI.add_constraint(model, f, MOI.Reified(MOI.GreaterThan(3)))
     @test sprint(write, model) == """
     var int: x;
     var int: y;
@@ -390,7 +390,7 @@ function test_write_alldifferent_reified()
     MOI.add_constraint(
         model,
         MOI.VectorOfVariables([bool; z]),
-        MiniZinc.Reified(MOI.AllDifferent(2)),
+        MOI.Reified(MOI.AllDifferent(2)),
     )
     @test sprint(write, model) == """
     include "alldifferent.mzn";
@@ -434,7 +434,7 @@ function test_write_countdistinct_reified()
     MOI.add_constraint(
         model,
         MOI.VectorOfVariables([b; x]),
-        MiniZinc.Reified(MOI.CountDistinct(4)),
+        MOI.Reified(MOI.CountDistinct(4)),
     )
     for i in 1:4
         MOI.set(model, MOI.VariableName(), x[i], "x$i")
@@ -488,7 +488,7 @@ function test_write_countbelongs_reified()
     MOI.add_constraint(
         model,
         MOI.VectorOfVariables([b; x]),
-        MiniZinc.Reified(MOI.CountBelongs(4, set)),
+        MOI.Reified(MOI.CountBelongs(4, set)),
     )
     @test sprint(write, model) == """
     include "among.mzn";
@@ -542,7 +542,7 @@ function test_write_countatleast_reified()
     MOI.add_constraint(
         model,
         MOI.VectorOfVariables(variables),
-        MiniZinc.Reified(MOI.CountAtLeast(1, partitions, set)),
+        MOI.Reified(MOI.CountAtLeast(1, partitions, set)),
     )
     MOI.set(model, MOI.VariableName(), x, "x")
     MOI.set(model, MOI.VariableName(), y, "y")
@@ -598,7 +598,7 @@ function test_write_countgreaterthan_reified()
     MOI.add_constraint(
         model,
         MOI.VectorOfVariables([b; c; y; x]),
-        MiniZinc.Reified(MOI.CountGreaterThan(5)),
+        MOI.Reified(MOI.CountGreaterThan(5)),
     )
     MOI.set(model, MOI.VariableName(), c, "c")
     MOI.set(model, MOI.VariableName(), y, "y")
@@ -646,7 +646,7 @@ function test_write_binpacking_reified()
     MOI.add_constraint(
         model,
         MOI.VectorOfVariables([b; x]),
-        MiniZinc.Reified(MOI.BinPacking(2, [3, 4])),
+        MOI.Reified(MOI.BinPacking(2, [3, 4])),
     )
     MOI.set(model, MOI.VariableName(), x[1], "x1")
     MOI.set(model, MOI.VariableName(), x[2], "x2")
@@ -750,7 +750,7 @@ function test_write_cumulative_reified()
     MOI.add_constraint(
         model,
         MOI.VectorOfVariables([z; s; d; r; b]),
-        MiniZinc.Reified(MOI.Cumulative(10)),
+        MOI.Reified(MOI.Cumulative(10)),
     )
     MOI.set(model, MOI.VariableName(), b, "b")
     MOI.set(model, MOI.VariableName(), z, "z")
@@ -806,7 +806,7 @@ function test_write_table_reified()
     MOI.add_constraint(
         model,
         MOI.VectorOfVariables([b; x]),
-        MiniZinc.Reified(MOI.Table(table)),
+        MOI.Reified(MOI.Table(table)),
     )
     for i in 1:3
         MOI.set(model, MOI.VariableName(), x[i], "x$i")
@@ -828,14 +828,14 @@ function test_model_unsupported_vectoraffine_constraint()
     x = MOI.add_variables(model, 2)
     f = MOI.Utilities.operate(vcat, Int, x[1], 2 * x[2])
     @test MOI.supports_constraint(model, typeof(f), MOI.AllDifferent) == false
-    set = MiniZinc.Reified(MOI.GreaterThan(1))
+    set = MOI.Reified(MOI.GreaterThan(1))
     @test MOI.supports_constraint(model, typeof(f), typeof(set)) == true
     return
 end
 
 function test_reified_dimension()
-    @test MOI.dimension(MiniZinc.Reified(MOI.GreaterThan(1))) == 2
-    @test MOI.dimension(MiniZinc.Reified(MOI.AllDifferent(2))) == 3
+    @test MOI.dimension(MOI.Reified(MOI.GreaterThan(1))) == 2
+    @test MOI.dimension(MOI.Reified(MOI.AllDifferent(2))) == 3
     return
 end
 
