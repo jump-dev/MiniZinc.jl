@@ -67,13 +67,13 @@ julia> function main()
            MOI.add_constraint(
                model,
                MOI.VectorOfVariables([z[1], x[1], x[2]]),
-               MiniZinc.Reified(MOI.AllDifferent(2)),
+               MOI.Reified(MOI.AllDifferent(2)),
            )
            # z₂ <-> x₂ != x₃
            MOI.add_constraint(
                model,
                MOI.VectorOfVariables([z[2], x[2], x[3]]),
-               MiniZinc.Reified(MOI.AllDifferent(2)),
+               MOI.Reified(MOI.AllDifferent(2)),
            )
            # z₁ + z₂ = 1
            MOI.add_constraint(model, 1 * z[1] + x[2], MOI.EqualTo(1))
