@@ -34,8 +34,11 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
     inner::Model{T}
     has_solution::Bool
     primal_solution::Dict{MOI.VariableIndex,T}
+    options::Dict{String,Any}
     function Optimizer{T}(solver::String) where {T}
-        return new(solver, Model{T}(), false, Dict{MOI.VariableIndex,T}())
+        primal_solution = Dict{MOI.VariableIndex,T}()
+        options = Dict{String,Any}("model_filename" => "")
+        return new(solver, Model{T}(), false, primal_solution, options)
     end
 end
 
@@ -61,7 +64,10 @@ end
 
 function _run_minizinc(dest::Optimizer)
     dir = mktempdir()
-    filename = joinpath(dir, "model.mzn")
+    filename = dest.options["model_filename"]
+    if isempty(filename)
+        filename = joinpath(dir, "model.mzn")
+    end
     output = joinpath(dir, "model.ozn")
     open(filename, "w") do io
         return write(io, dest.inner)
@@ -83,6 +89,19 @@ function MOI.empty!(model::Optimizer)
     MOI.empty!(model.inner)
     model.has_solution = false
     empty!(model.primal_solution)
+    return
+end
+
+function MOI.supports(model::Optimizer, attr::MOI.RawOptimizerAttribute)
+    return haskey(model.options, attr.name)
+end
+
+function MOI.get(model::Optimizer, attr::MOI.RawOptimizerAttribute)
+    return get(model.options, attr.name, nothing)
+end
+
+function MOI.set(model::Optimizer, attr::MOI.RawOptimizerAttribute, value)
+    model.options[attr.name] = value
     return
 end
 

@@ -1023,6 +1023,30 @@ function test_moi_tests()
     return
 end
 
+function test_model_filename()
+    model = MOI.Utilities.Model{Int}()
+    x, x_int = MOI.add_constrained_variable(model, MOI.Integer())
+    c1 = MOI.add_constraint(model, x, MOI.GreaterThan(1))
+    c2 = MOI.add_constraint(model, x, MOI.LessThan(3))
+    @test MOI.is_valid(model, x)
+    @test MOI.is_valid(model, x_int)
+    @test MOI.is_valid(model, c1)
+    @test MOI.is_valid(model, c2)
+    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    attr = MOI.RawOptimizerAttribute("model_filename")
+    @test MOI.supports(solver, attr)
+    @test MOI.get(solver, attr) == ""
+    MOI.set(solver, attr, "test.mzn")
+    @test MOI.get(solver, attr) == "test.mzn"
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ResultCount()) >= 1
+    @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) in [1, 2, 3]
+    @test read("test.mzn", String) == "var 1 .. 3: x1;\nsolve satisfy;\n"
+    rm("test.mzn")
+    return
+end
+
 end
 
 TestMiniZinc.runtests()

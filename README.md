@@ -102,3 +102,14 @@ model = Model(() -> MiniZinc.Optimizer{Float64}("gurobi"))
 optimize!(model)
 @show value.(x)
 ```
+
+## Options
+
+Set options using `MOI.RawOptimizerAttribute` in MOI or
+`set_optimizer_attribute` in JuMP.
+
+`MiniZinc.jl` supports the following options:
+
+ * `model_filename::String = ""`: the location at which to write out the `.mzn`
+   file during optimization. This option can be helpful during debugging. If
+   left empty, a temporary file will be used instead.
