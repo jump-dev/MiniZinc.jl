@@ -1061,7 +1061,6 @@ function test_model_nlp_boolean()
     solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
     MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
     index_map, _ = MOI.optimize!(solver, model)
-    println(read("test.mzn", String))
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     y = [index_map[v] for v in x]
@@ -1070,6 +1069,41 @@ function test_model_nlp_boolean()
     @test (sol[1] && sol[2]) == false
     @test read("test.mzn", String) ==
           "var bool: x1;\nvar bool: x2;\nconstraint (x1 \\/ x2) == true;\nconstraint (x1 /\\ x2) == false;\nsolve satisfy;\n"
+    rm("test.mzn")
+    return
+end
+
+function test_model_nlp_boolean_nested()
+    model = MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Int}())
+    x = MOI.add_variables(model, 2)
+    MOI.add_constraint.(model, x, MOI.ZeroOne())
+    y = MOI.add_variable(model)
+    MOI.add_constraint(model, y, MOI.Integer())
+    MOI.add_constraint(model, y, MOI.Interval(0, 10))
+    nlp = MOI.Nonlinear.Model()
+    a, b = x
+    # a || (b && (y < 5))
+    MOI.Nonlinear.add_constraint(
+        nlp,
+        :(($a || ($b && ($y < 5)))),
+        MOI.EqualTo(1.0),
+    )
+    MOI.Nonlinear.add_constraint(nlp, :($a < 1), MOI.EqualTo(1.0))
+    backend = MOI.Nonlinear.ExprGraphOnly()
+    evaluator = MOI.Nonlinear.Evaluator(nlp, backend, x)
+    MOI.set(model, MOI.NLPBlock(), MOI.NLPBlockData(evaluator))
+    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ResultCount()) >= 1
+    sol_x = [index_map[v] for v in [x; y]]
+    sol = round.(Int, MOI.get(solver, MOI.VariablePrimal(), sol_x))
+    @test sol[1] == 0
+    @test sol[2] == 1
+    @test sol[3] < 5
+    @test read("test.mzn", String) ==
+          "var bool: x1;\nvar bool: x2;\nvar 0 .. 10: x3;\nconstraint (x1 \\/ (x2 /\\ (x3 < 5))) == true;\nconstraint (x1 < 1) == true;\nsolve satisfy;\n"
     rm("test.mzn")
     return
 end
@@ -1088,7 +1122,6 @@ function test_model_nlp_boolean_jump()
     solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
     MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
     index_map, _ = MOI.optimize!(solver, model)
-    println(read("test.mzn", String))
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     y = [index_map[v] for v in x]

@@ -494,7 +494,14 @@ function _write_logical_expression(io, model, variables, expr)
 end
 
 function _write_call_expression(io, model, variables, expr)
-    ops = Dict(:- => "-", :+ => "+")
+    ops = Dict(
+        :- => "-",
+        :+ => "+",
+        :(<) => "<",
+        :(>) => ">",
+        :(<=) => "<=",
+        :(>=) => ">=",
+    )
     op = get(ops, expr.args[1], nothing)
     @assert op !== nothing
     print(io, "(")
@@ -528,11 +535,10 @@ function _write_expression(io, model, variables, x::MOI.VariableIndex)
 end
 
 function _write_expression(io, model, variables, x::Real)
-    if isone(x)
-        print(io, "1")
+    if isinteger(x)
+        print(io, round(Int, x))
     else
-        @assert iszero(x)
-        print(io, "0")
+        print(io, x)
     end
     return
 end
