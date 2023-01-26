@@ -71,6 +71,13 @@ function MOI.supports_constraint(
     return true
 end
 
+MOI.supports(::Model, ::MOI.NLPBlock) = true
+
+function MOI.set(model::Model, ::MOI.NLPBlock, data::MOI.NLPBlockData)
+    model.ext[:nlp_block] = data
+    return
+end
+
 include("write.jl")
 include("optimize.jl")
 
