@@ -83,10 +83,13 @@ end
 
 # The MOI interface
 
+MOI.get(model::Optimizer, ::MOI.SolverName) = "MiniZinc"
+
 MOI.is_empty(model::Optimizer) = MOI.is_empty(model.inner)
 
 function MOI.empty!(model::Optimizer)
     MOI.empty!(model.inner)
+    empty!(model.inner.ext)
     model.has_solution = false
     empty!(model.primal_solution)
     return
