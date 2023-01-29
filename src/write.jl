@@ -496,11 +496,13 @@ end
 _INFIX_OPS = Dict(
     :- => "-",
     :+ => "+",
+    :* => "*",
     :(<) => "<",
     :(>) => ">",
     :(<=) => "<=",
     :(>=) => ">=",
     :(=>) => "->",
+    :⊻ => "xor",
 )
 
 _PREFIX_OPS = Dict(:(!) => "not")
@@ -520,10 +522,6 @@ function _write_call_expression(io, model, variables, expr)
         @assert op !== nothing
         print(io, op, "(")
         _write_expression(io, model, variables, expr.args[2])
-        for i in 3:length(expr.args)
-            print(io, ", ")
-            _write_expression(io, model, variables, expr.args[i])
-        end
         print(io, ")")
     end
     return

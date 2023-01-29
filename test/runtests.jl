@@ -1141,9 +1141,10 @@ function test_model_nlp_boolean_registered()
     nlp = MOI.Nonlinear.Model()
     f(args...) = error("evaluation not supported")
     MOI.Nonlinear.register_operator(nlp, :!, 1, f, f, f)
+    MOI.Nonlinear.register_operator(nlp, :⊻, 2, f, f, f)
     MOI.Nonlinear.register_operator(nlp, :(=>), 2, f, f, f)
     a, b, c = x
-    MOI.Nonlinear.add_constraint(nlp, :(($a => !($b || $c))), MOI.EqualTo(1.0))
+    MOI.Nonlinear.add_constraint(nlp, :(($a => !($b ⊻ $c))), MOI.EqualTo(1.0))
     backend = MOI.Nonlinear.ExprGraphOnly()
     evaluator = MOI.Nonlinear.Evaluator(nlp, backend, x)
     MOI.set(model, MOI.NLPBlock(), MOI.NLPBlockData(evaluator))
@@ -1156,7 +1157,7 @@ function test_model_nlp_boolean_registered()
     sol = round.(Bool, MOI.get(solver, MOI.VariablePrimal(), y))
     @test ifelse(sol[1], !(sol[2] || sol[3]), true)
     @test read("test.mzn", String) ==
-          "var bool: x1;\nvar bool: x2;\nvar bool: x3;\nconstraint (x1 -> not((x2 \\/ x3))) == true;\nsolve satisfy;\n"
+          "var bool: x1;\nvar bool: x2;\nvar bool: x3;\nconstraint (x1 -> not((x2 xor x3))) == true;\nsolve satisfy;\n"
     rm("test.mzn")
     return
 end
