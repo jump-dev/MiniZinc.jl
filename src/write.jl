@@ -493,24 +493,37 @@ function _write_logical_expression(io, model, variables, expr)
     return
 end
 
+_INFIX_OPS = Dict(
+    :- => "-",
+    :+ => "+",
+    :* => "*",
+    :(<) => "<",
+    :(>) => ">",
+    :(<=) => "<=",
+    :(>=) => ">=",
+    :(=>) => "->",
+    :⊻ => "xor",
+)
+
+_PREFIX_OPS = Dict(:(!) => "not")
+
 function _write_call_expression(io, model, variables, expr)
-    ops = Dict(
-        :- => "-",
-        :+ => "+",
-        :(<) => "<",
-        :(>) => ">",
-        :(<=) => "<=",
-        :(>=) => ">=",
-    )
-    op = get(ops, expr.args[1], nothing)
-    @assert op !== nothing
-    print(io, "(")
-    _write_expression(io, model, variables, expr.args[2])
-    for i in 3:length(expr.args)
-        print(io, " ", op, " ")
-        _write_expression(io, model, variables, expr.args[i])
+    op = get(_INFIX_OPS, expr.args[1], nothing)
+    if op !== nothing
+        print(io, "(")
+        _write_expression(io, model, variables, expr.args[2])
+        for i in 3:length(expr.args)
+            print(io, " ", op, " ")
+            _write_expression(io, model, variables, expr.args[i])
+        end
+        print(io, ")")
+    else
+        op = get(_PREFIX_OPS, expr.args[1], nothing)
+        @assert op !== nothing
+        print(io, op, "(")
+        _write_expression(io, model, variables, expr.args[2])
+        print(io, ")")
     end
-    print(io, ")")
     return
 end
 
