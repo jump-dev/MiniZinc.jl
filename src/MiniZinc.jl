@@ -32,13 +32,11 @@ MOI.Utilities.@model(
         MOI.Cumulative,
         MOI.Path,
         MOI.Reified{MOI.AllDifferent},
-        # MOI.Reified{MOI.Circuit}, Unsupported by MiniZinc
         MOI.Reified{MOI.CountAtLeast},
         MOI.Reified{MOI.CountBelongs},
         MOI.Reified{MOI.CountDistinct},
         MOI.Reified{MOI.CountGreaterThan},
         MOI.Reified{MOI.Cumulative},
-        # MOI.Reified{MOI.Path}, Unsupported by MiniZinc
     ),
     (
         MOI.BinPacking,
@@ -50,7 +48,7 @@ MOI.Utilities.@model(
         ReifiedEqualTo,
     ),
     (),
-    (MOI.ScalarAffineFunction,),
+    (MOI.ScalarAffineFunction, MOI.ScalarNonlinearFunction),
     (MOI.VectorOfVariables,),
     (MOI.VectorAffineFunction,)
 )
@@ -69,13 +67,6 @@ function MOI.supports_constraint(
     ::Type{MOI.Reified{S}},
 ) where {T,S<:Union{MOI.LessThan{T},MOI.GreaterThan{T},MOI.EqualTo{T}}}
     return true
-end
-
-MOI.supports(::Model, ::MOI.NLPBlock) = true
-
-function MOI.set(model::Model, ::MOI.NLPBlock, data::MOI.NLPBlockData)
-    model.ext[:nlp_block] = data
-    return
 end
 
 include("write.jl")
