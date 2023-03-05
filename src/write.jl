@@ -3,6 +3,34 @@
 # Use of this source code is governed by an MIT-style license that can be found
 # in the LICENSE.md file or at https://opensource.org/licenses/MIT.
 
+function _write_predicates(io::IO, model)
+    for (F, S) in MOI.get(model, MOI.ListOfConstraintTypesPresent())
+        if S == MOI.AllDifferent || S == MOI.Reified{MOI.AllDifferent}
+            println(io, "include \"alldifferent.mzn\";")
+        elseif S <: MOI.BinPacking || S <: MOI.Reified{<:MOI.BinPacking}
+            println(io, "include \"bin_packing.mzn\";")
+        elseif S == MOI.Circuit  # Reified unsupported by MiniZinc
+            println(io, "include \"circuit.mzn\";")
+        elseif S == MOI.CountAtLeast || S == MOI.Reified{MOI.CountAtLeast}
+            println(io, "include \"at_least.mzn\";")
+        elseif S == MOI.CountBelongs || S == MOI.Reified{MOI.CountBelongs}
+            println(io, "include \"among.mzn\";")
+        elseif S == MOI.CountDistinct || S == MOI.Reified{MOI.CountDistinct}
+            println(io, "include \"nvalue.mzn\";")
+        elseif S == MOI.CountGreaterThan ||
+               S == MOI.Reified{MOI.CountGreaterThan}
+            println(io, "include \"count_gt.mzn\";")
+        elseif S == MOI.Cumulative || S == MOI.Reified{MOI.Cumulative}
+            println(io, "include \"cumulative.mzn\";")
+        elseif S == MOI.Path  # Reified unsupported by MiniZinc
+            println(io, "include \"path.mzn\";")
+        elseif S <: MOI.Table || S <: MOI.Reified{<:MOI.Table}
+            println(io, "include \"table.mzn\";")
+        end
+    end
+    return
+end
+
 function _variable_info(model::Model{T}, x) where {T}
     name = MOI.get(model, MOI.VariableName(), x)
     F = MOI.VariableIndex
@@ -364,68 +392,63 @@ function _write_constraint(
     return
 end
 
-function _write_predicates(io, model)
-    for (F, S) in MOI.get(model, MOI.ListOfConstraintTypesPresent())
-        if S == MOI.AllDifferent || S == MOI.Reified{MOI.AllDifferent}
-            println(io, "include \"alldifferent.mzn\";")
-        elseif S <: MOI.BinPacking || S <: MOI.Reified{<:MOI.BinPacking}
-            println(io, "include \"bin_packing.mzn\";")
-        elseif S == MOI.Circuit  # Reified unsupported by MiniZinc
-            println(io, "include \"circuit.mzn\";")
-        elseif S == MOI.CountAtLeast || S == MOI.Reified{MOI.CountAtLeast}
-            println(io, "include \"at_least.mzn\";")
-        elseif S == MOI.CountBelongs || S == MOI.Reified{MOI.CountBelongs}
-            println(io, "include \"among.mzn\";")
-        elseif S == MOI.CountDistinct || S == MOI.Reified{MOI.CountDistinct}
-            println(io, "include \"nvalue.mzn\";")
-        elseif S == MOI.CountGreaterThan ||
-               S == MOI.Reified{MOI.CountGreaterThan}
-            println(io, "include \"count_gt.mzn\";")
-        elseif S == MOI.Cumulative || S == MOI.Reified{MOI.Cumulative}
-            println(io, "include \"cumulative.mzn\";")
-        elseif S == MOI.Path  # Reified unsupported by MiniZinc
-            println(io, "include \"path.mzn\";")
-        elseif S <: MOI.Table || S <: MOI.Reified{<:MOI.Table}
-            println(io, "include \"table.mzn\";")
-        end
+function _write_constraint(
+    io::IO,
+    variables,
+    f::MOI.ScalarNonlinearFunction{T},
+    s::MOI.EqualTo{T},
+) where {T}
+    print(io, "constraint ")
+    _write_expression(io, variables, f)
+    print(io, " == ")
+    if isone(s.value)
+        println(io, "true;")
+    else
+        @assert iszero(s.value)
+        println(io, "false;")
     end
     return
 end
 
-# function _write_constraint(io, model, variables, expr::Expr)
-#     print(io, "constraint ")
-#     if Meta.isexpr(expr, :call, 3)
-#         @assert expr.args[1] in (:(<=), :(>=), :(<), :(>), :(==))
-#         _write_expression(io, model, variables, expr.args[2])
-#         rhs = expr.args[3]
-#         if isone(rhs)
-#             println(io, " $(expr.args[1]) true;")
-#         else
-#             @assert iszero(rhs)
-#             println(io, " $(expr.args[1]) false;")
-#         end
-#     else
-#         @assert Meta.isexpr(expr, :comparison, 5)
-#         error("Two sided not supported")
-#     end
-#     return
-# end
-
-function _write_logical_expression(io, model, variables, expr)
-    ops = Dict(:|| => "\\/", :&& => "/\\")
-    op = get(ops, expr.head, nothing)
-    @assert op !== nothing
+function _write_expression(
+    io::IO,
+    variables,
+    f::MOI.ScalarNonlinearFunction{T},
+) where {T}
+    op = get(_INFIX_OPS, f.head, nothing)
+    if op !== nothing
+        @assert length(f.args) > 1
+    else
+        @assert length(f.args) == 1
+        op = get(_PREFIX_OPS, f.head, nothing)
+        @assert op !== nothing
+        print(io, op)
+    end
     print(io, "(")
-    _write_expression(io, model, variables, expr.args[1])
-    for i in 2:length(expr.args)
+    _write_expression(io, variables, f.args[1])
+    for i in 2:length(f.args)
         print(io, " ", op, " ")
-        _write_expression(io, model, variables, expr.args[i])
+        _write_expression(io, variables, f.args[i])
     end
     print(io, ")")
     return
 end
 
+function _write_expression(io::IO, variables, x::MOI.VariableIndex)
+    print(io, _to_string(variables, x))
+    return
+end
+
+function _write_expression(io::IO, _, x::Real)
+    print(io, isinteger(x) ? round(Int, x) : x)
+    return
+end
+
+_PREFIX_OPS = Dict(:(!) => "not")
+
 _INFIX_OPS = Dict(
+    :|| => "\\/",
+    :&& => "/\\",
     :- => "-",
     :+ => "+",
     :* => "*",
@@ -436,53 +459,6 @@ _INFIX_OPS = Dict(
     :(=>) => "->",
     :⊻ => "xor",
 )
-
-_PREFIX_OPS = Dict(:(!) => "not")
-
-function _write_call_expression(io, model, variables, expr)
-    op = get(_INFIX_OPS, expr.args[1], nothing)
-    if op !== nothing
-        print(io, "(")
-        _write_expression(io, model, variables, expr.args[2])
-        for i in 3:length(expr.args)
-            print(io, " ", op, " ")
-            _write_expression(io, model, variables, expr.args[i])
-        end
-        print(io, ")")
-    else
-        op = get(_PREFIX_OPS, expr.args[1], nothing)
-        @assert op !== nothing
-        print(io, op, "(")
-        _write_expression(io, model, variables, expr.args[2])
-        print(io, ")")
-    end
-    return
-end
-
-function _write_expression(io, model, variables, expr::Expr)
-    if Meta.isexpr(expr, :ref)
-        @assert expr.args[1] == :x
-        _write_expression(io, model, variables, expr.args[2])
-        return
-    end
-    if Meta.isexpr(expr, :||) || Meta.isexpr(expr, :&&)
-        _write_logical_expression(io, model, variables, expr)
-    else
-        @assert Meta.isexpr(expr, :call)
-        _write_call_expression(io, model, variables, expr)
-    end
-    return
-end
-
-function _write_expression(io, model, variables, x::MOI.VariableIndex)
-    print(io, _to_string(variables, x))
-    return
-end
-
-function _write_expression(io, model, variables, x::Real)
-    print(io, isinteger(x) ? round(Int, x) : x)
-    return
-end
 
 function Base.write(io::IO, model::Model{T}) where {T}
     s1(s) = match(r"^[^a-zA-Z]", s) !== nothing ? "x" * s : s
@@ -501,14 +477,6 @@ function Base.write(io::IO, model::Model{T}) where {T}
             _write_constraint(io, variables, f, s)
         end
     end
-    # nlp_block = get(model.ext, :nlp_block, nothing)
-    # if nlp_block !== nothing
-    #     MOI.initialize(nlp_block.evaluator, [:ExprGraph])
-    #     for i in 1:length(nlp_block.constraint_bounds)
-    #         expr = MOI.constraint_expr(nlp_block.evaluator, i)
-    #         _write_constraint(io, model, variables, expr)
-    #     end
-    # end
     sense = MOI.get(model, MOI.ObjectiveSense())
     if sense == MOI.FEASIBILITY_SENSE
         println(io, "solve satisfy;")
