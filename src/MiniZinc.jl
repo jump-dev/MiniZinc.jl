@@ -32,13 +32,11 @@ MOI.Utilities.@model(
         MOI.Cumulative,
         MOI.Path,
         MOI.Reified{MOI.AllDifferent},
-        # MOI.Reified{MOI.Circuit}, Unsupported by MiniZinc
         MOI.Reified{MOI.CountAtLeast},
         MOI.Reified{MOI.CountBelongs},
         MOI.Reified{MOI.CountDistinct},
         MOI.Reified{MOI.CountGreaterThan},
         MOI.Reified{MOI.Cumulative},
-        # MOI.Reified{MOI.Path}, Unsupported by MiniZinc
     ),
     (
         MOI.BinPacking,
