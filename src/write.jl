@@ -445,7 +445,7 @@ end
 function _write_constraint(
     io::IO,
     variables,
-    f::MOI.ScalarNonlinearFunction{T},
+    f::MOI.ScalarNonlinearFunction,
     s::MOI.EqualTo{T},
 ) where {T}
     print(io, "constraint ")
@@ -459,11 +459,7 @@ function _write_constraint(
     return
 end
 
-function _write_expression(
-    io::IO,
-    variables,
-    f::MOI.ScalarNonlinearFunction{T},
-) where {T}
+function _write_expression(io::IO, variables, f::MOI.ScalarNonlinearFunction)
     op = get(_INFIX_OPS, f.head, nothing)
     if op !== nothing
         @assert length(f.args) > 1

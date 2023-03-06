@@ -47,8 +47,8 @@ MOI.Utilities.@model(
         ReifiedGreaterThan,
         ReifiedEqualTo,
     ),
-    (),
-    (MOI.ScalarAffineFunction, MOI.ScalarNonlinearFunction),
+    (MOI.ScalarNonlinearFunction,),
+    (MOI.ScalarAffineFunction,),
     (MOI.VectorOfVariables,),
     (MOI.VectorAffineFunction,)
 )
