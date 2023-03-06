@@ -3,16 +3,14 @@
 # Use of this source code is governed by an MIT-style license that can be found
 # in the LICENSE.md file or at https://opensource.org/licenses/MIT.
 
-function _write_predicates(io::IO, ::Type{<:MOI.AbstractSet})
-    return nothing
-end
+_write_predicates(io::IO, ::Type{<:MOI.AbstractSet}) = nothing
 
 function _write_predicates(
     io::IO,
     ::Type{<:Union{MOI.AllDifferent,MOI.Reified{MOI.AllDifferent}}},
 )
     println(io, "include \"alldifferent.mzn\";")
-    return nothing
+    return
 end
 
 function _write_predicates(
@@ -20,12 +18,13 @@ function _write_predicates(
     ::Type{<:Union{<:MOI.BinPacking,<:MOI.Reified{<:MOI.BinPacking}}},
 )
     println(io, "include \"bin_packing.mzn\";")
-    return nothing
+    return
 end
 
-function _write_predicates(io::IO, ::Type{MOI.Circuit}) # Reified unsupported by MiniZinc
+# Reified{MOI.Circuit} is unsupported by MiniZinc
+function _write_predicates(io::IO, ::Type{MOI.Circuit})
     println(io, "include \"circuit.mzn\";")
-    return nothing
+    return
 end
 
 function _write_predicates(
@@ -33,7 +32,7 @@ function _write_predicates(
     ::Type{<:Union{MOI.CountAtLeast,MOI.Reified{MOI.CountAtLeast}}},
 )
     println(io, "include \"at_least.mzn\";")
-    return nothing
+    return
 end
 
 function _write_predicates(
@@ -41,7 +40,7 @@ function _write_predicates(
     ::Type{<:Union{MOI.CountBelongs,MOI.Reified{MOI.CountBelongs}}},
 )
     println(io, "include \"among.mzn\";")
-    return nothing
+    return
 end
 
 function _write_predicates(
@@ -49,7 +48,7 @@ function _write_predicates(
     ::Type{<:Union{MOI.CountDistinct,MOI.Reified{MOI.CountDistinct}}},
 )
     println(io, "include \"nvalue.mzn\";")
-    return nothing
+    return
 end
 
 function _write_predicates(
@@ -57,7 +56,7 @@ function _write_predicates(
     ::Type{<:Union{MOI.CountGreaterThan,MOI.Reified{MOI.CountGreaterThan}}},
 )
     println(io, "include \"count_gt.mzn\";")
-    return nothing
+    return
 end
 
 function _write_predicates(
@@ -65,12 +64,13 @@ function _write_predicates(
     ::Type{<:Union{MOI.Cumulative,MOI.Reified{MOI.Cumulative}}},
 )
     println(io, "include \"cumulative.mzn\";")
-    return nothing
+    return
 end
 
-function _write_predicates(io::IO, ::Type{MOI.Path}) # Reified unsupported by MiniZinc
+# Reified{MOI.Path} is unsupported by MiniZinc
+function _write_predicates(io::IO, ::Type{MOI.Path})
     println(io, "include \"path.mzn\";")
-    return nothing
+    return
 end
 
 function _write_predicates(
@@ -78,7 +78,7 @@ function _write_predicates(
     ::Type{<:Union{<:MOI.Table,<:MOI.Reified{<:MOI.Table}}},
 )
     println(io, "include \"table.mzn\";")
-    return nothing
+    return
 end
 
 function _variable_info(model::Model{T}, x) where {T}
