@@ -461,7 +461,9 @@ function _write_expression(io::IO, variables, f::MOI.ScalarNonlinearFunction)
     else
         @assert length(f.args) == 1
         op = get(_PREFIX_OPS, f.head, nothing)
-        @assert op !== nothing
+        if op === nothing
+            throw(MOI.UnsupportedNonlinearOperator(f.head))
+        end
         print(io, op)
     end
     print(io, "(")
@@ -483,22 +485,6 @@ function _write_expression(io::IO, _, x::Real)
     print(io, isinteger(x) ? round(Int, x) : x)
     return
 end
-
-_PREFIX_OPS = Dict(:(!) => "not")
-
-_INFIX_OPS = Dict(
-    :|| => "\\/",
-    :&& => "/\\",
-    :- => "-",
-    :+ => "+",
-    :* => "*",
-    :(<) => "<",
-    :(>) => ">",
-    :(<=) => "<=",
-    :(>=) => ">=",
-    :(=>) => "->",
-    :⊻ => "xor",
-)
 
 function Base.write(io::IO, model::Model{T}) where {T}
     rs = [

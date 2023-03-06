@@ -69,6 +69,27 @@ function MOI.supports_constraint(
     return true
 end
 
+_PREFIX_OPS = Dict(:(!) => "not")
+
+_INFIX_OPS = Dict(
+    :|| => "\\/",
+    :&& => "/\\",
+    :- => "-",
+    :+ => "+",
+    :* => "*",
+    :(<) => "<",
+    :(>) => ">",
+    :(<=) => "<=",
+    :(>=) => ">=",
+    :(=>) => "->",
+    :⊻ => "xor",
+)
+
+_SUPPORTED_OPS =
+    reduce(vcat, collect(keys(d)) for d in [_PREFIX_OPS, _INFIX_OPS])
+
+MOI.get(::Model, ::MOI.ListOfSupportedNonlinearOperators) = _SUPPORTED_OPS
+
 include("write.jl")
 include("optimize.jl")
 

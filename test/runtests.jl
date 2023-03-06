@@ -1164,6 +1164,31 @@ function test_model_nonlinear_boolean_nested_not()
     return
 end
 
+function test_unsupported_nonlinear_operator()
+    model = MOI.Utilities.Model{Int}()
+    x = MOI.add_variable(model)
+    snf = MOI.ScalarNonlinearFunction(:my_f, Any[x])
+    MOI.add_constraint(model, snf, MOI.EqualTo(1))
+    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
+    @test_throws(
+        MOI.UnsupportedNonlinearOperator(:my_f),
+        MOI.optimize!(solver, model),
+    )
+    rm("test.mzn")
+    return
+end
+
+function test_supported_operators()
+    model = MiniZinc.Model{Int}()
+    ops = MOI.get(model, MOI.ListOfSupportedNonlinearOperators())
+    @test :(!) in ops
+    @test :|| in ops
+    @test :* in ops
+    @test :⊻ in ops
+    return
+end
+
 function test_model_solver_name()
     solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
     @test MOI.get(solver, MOI.SolverName()) == "MiniZinc"
