@@ -3,6 +3,84 @@
 # Use of this source code is governed by an MIT-style license that can be found
 # in the LICENSE.md file or at https://opensource.org/licenses/MIT.
 
+function _write_predicates(io::IO, ::Type{<:MOI.AbstractSet})
+    return nothing
+end
+
+function _write_predicates(
+    io::IO,
+    ::Type{<:Union{MOI.AllDifferent,MOI.Reified{MOI.AllDifferent}}},
+)
+    println(io, "include \"alldifferent.mzn\";")
+    return nothing
+end
+
+function _write_predicates(
+    io::IO,
+    ::Type{<:Union{<:MOI.BinPacking,<:MOI.Reified{<:MOI.BinPacking}}},
+)
+    println(io, "include \"bin_packing.mzn\";")
+    return nothing
+end
+
+function _write_predicates(io::IO, ::Type{MOI.Circuit}) # Reified unsupported by MiniZinc
+    println(io, "include \"circuit.mzn\";")
+    return nothing
+end
+
+function _write_predicates(
+    io::IO,
+    ::Type{<:Union{MOI.CountAtLeast,MOI.Reified{MOI.CountAtLeast}}},
+)
+    println(io, "include \"at_least.mzn\";")
+    return nothing
+end
+
+function _write_predicates(
+    io::IO,
+    ::Type{<:Union{MOI.CountBelongs,MOI.Reified{MOI.CountBelongs}}},
+)
+    println(io, "include \"among.mzn\";")
+    return nothing
+end
+
+function _write_predicates(
+    io::IO,
+    ::Type{<:Union{MOI.CountDistinct,MOI.Reified{MOI.CountDistinct}}},
+)
+    println(io, "include \"nvalue.mzn\";")
+    return nothing
+end
+
+function _write_predicates(
+    io::IO,
+    ::Type{<:Union{MOI.CountGreaterThan,MOI.Reified{MOI.CountGreaterThan}}},
+)
+    println(io, "include \"count_gt.mzn\";")
+    return nothing
+end
+
+function _write_predicates(
+    io::IO,
+    ::Type{<:Union{MOI.Cumulative,MOI.Reified{MOI.Cumulative}}},
+)
+    println(io, "include \"cumulative.mzn\";")
+    return nothing
+end
+
+function _write_predicates(io::IO, ::Type{MOI.Path}) # Reified unsupported by MiniZinc
+    println(io, "include \"path.mzn\";")
+    return nothing
+end
+
+function _write_predicates(
+    io::IO,
+    ::Type{<:Union{<:MOI.Table,<:MOI.Reified{<:MOI.Table}}},
+)
+    println(io, "include \"table.mzn\";")
+    return nothing
+end
+
 function _variable_info(model::Model{T}, x) where {T}
     name = MOI.get(model, MOI.VariableName(), x)
     F = MOI.VariableIndex
@@ -364,34 +442,6 @@ function _write_constraint(
     return
 end
 
-function _write_predicates(io::IO, model)
-    for (F, S) in MOI.get(model, MOI.ListOfConstraintTypesPresent())
-        if S == MOI.AllDifferent || S == MOI.Reified{MOI.AllDifferent}
-            println(io, "include \"alldifferent.mzn\";")
-        elseif S <: MOI.BinPacking || S <: MOI.Reified{<:MOI.BinPacking}
-            println(io, "include \"bin_packing.mzn\";")
-        elseif S == MOI.Circuit  # Reified unsupported by MiniZinc
-            println(io, "include \"circuit.mzn\";")
-        elseif S == MOI.CountAtLeast || S == MOI.Reified{MOI.CountAtLeast}
-            println(io, "include \"at_least.mzn\";")
-        elseif S == MOI.CountBelongs || S == MOI.Reified{MOI.CountBelongs}
-            println(io, "include \"among.mzn\";")
-        elseif S == MOI.CountDistinct || S == MOI.Reified{MOI.CountDistinct}
-            println(io, "include \"nvalue.mzn\";")
-        elseif S == MOI.CountGreaterThan ||
-               S == MOI.Reified{MOI.CountGreaterThan}
-            println(io, "include \"count_gt.mzn\";")
-        elseif S == MOI.Cumulative || S == MOI.Reified{MOI.Cumulative}
-            println(io, "include \"cumulative.mzn\";")
-        elseif S == MOI.Path  # Reified unsupported by MiniZinc
-            println(io, "include \"path.mzn\";")
-        elseif S <: MOI.Table || S <: MOI.Reified{<:MOI.Table}
-            println(io, "include \"table.mzn\";")
-        end
-    end
-    return
-end
-
 function _write_nlp_constraint(io::IO, variables, expr::Expr)
     print(io, "constraint ")
     if Meta.isexpr(expr, :call, 3)
@@ -485,18 +535,17 @@ function _write_expression(io::IO, _, x::Real)
 end
 
 function Base.write(io::IO, model::Model{T}) where {T}
-    MOI.FileFormats.create_unique_variable_names(
-        model,
-        false,
-        [
-            s -> match(r"^[^a-zA-Z]", s) !== nothing ? "x" * s : s,
-            s -> replace(s, r"[^A-Za-z0-9_]" => "_"),
-        ],
-    )
-    _write_predicates(io, model)
+    rs = [
+        s -> match(r"^[^a-zA-Z]", s) !== nothing ? "x" * s : s,
+        s -> replace(s, r"[^A-Za-z0-9_]" => "_"),
+    ]
+    MOI.FileFormats.create_unique_variable_names(model, false, rs)
+    constraint_types = MOI.get(model, MOI.ListOfConstraintTypesPresent())
+    set_types = unique(S for (_, S) in constraint_types)
+    _write_predicates.(io, set_types)
     variables, constraint_lines = _write_variables(io, model)
     print(io, constraint_lines)
-    for (F, S) in MOI.get(model, MOI.ListOfConstraintTypesPresent())
+    for (F, S) in constraint_types
         if F == MOI.VariableIndex
             continue
         end
