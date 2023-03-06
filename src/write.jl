@@ -541,8 +541,9 @@ function Base.write(io::IO, model::Model{T}) where {T}
     ]
     MOI.FileFormats.create_unique_variable_names(model, false, rs)
     constraint_types = MOI.get(model, MOI.ListOfConstraintTypesPresent())
-    set_types = unique(S for (_, S) in constraint_types)
-    _write_predicates.(io, set_types)
+    for S in unique(S for (_, S) in constraint_types)
+        _write_predicates(io, S)
+    end
     variables, constraint_lines = _write_variables(io, model)
     print(io, constraint_lines)
     for (F, S) in constraint_types
