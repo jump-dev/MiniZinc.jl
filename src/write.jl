@@ -446,16 +446,11 @@ function _write_constraint(
     io::IO,
     variables,
     f::MOI.ScalarNonlinearFunction,
-    s::MOI.EqualTo{T},
+    s::Union{MOI.LessThan{T},MOI.GreaterThan{T},MOI.EqualTo{T}},
 ) where {T}
     print(io, "constraint ")
     _write_expression(io, variables, f)
-    if isone(s.value)
-        println(io, " == true;")
-    else
-        @assert iszero(s.value)
-        println(io, " == false;")
-    end
+    println(io, _sense(s), _rhs(s), ";")
     return
 end
 
