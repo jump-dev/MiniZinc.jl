@@ -85,9 +85,9 @@ function _variable_info(model::Model{T}, x) where {T}
     name = MOI.get(model, MOI.VariableName(), x)
     F = MOI.VariableIndex
     lb, ub = typemin(T), typemax(T)
-    # ZeroOne
+    # Boolean/ZeroOne
     ci_zero = MOI.ConstraintIndex{F,MOI.ZeroOne}(x.value)
-    is_bin = MOI.is_valid(model, ci_zero)
+    is_bool = (T == Bool) || MOI.is_valid(model, ci_zero)
     # Integer
     ci_int = MOI.ConstraintIndex{F,MOI.Integer}(x.value)
     is_int = MOI.is_valid(model, ci_int)
@@ -112,10 +112,10 @@ function _variable_info(model::Model{T}, x) where {T}
         set = MOI.get(model, MOI.ConstraintSet(), ci_iv)
         lb, ub = set.lower, set.upper
     end
-    if is_bin || is_int
+    if is_bool || is_int
         lb, ub = ceil(Int, lb), floor(Int, ub)
     end
-    return (name = name, lb = lb, ub = ub, is_int = is_int, is_bin = is_bin)
+    return (name = name, lb = lb, ub = ub, is_int = is_int, is_bool = is_bool)
 end
 
 function _write_variables(io::IO, model::Model{T}) where {T}
@@ -125,7 +125,7 @@ function _write_variables(io::IO, model::Model{T}) where {T}
     for x in all_variables
         info = variables[x]
         lb, ub = info.lb, info.ub
-        if info.is_bin
+        if info.is_bool
             print(io, "var bool: $(info.name);")
             if ub == 0
                 constraint_lines *= "constraint bool_eq($(info.name), false);\n"

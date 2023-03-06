@@ -28,6 +28,20 @@ function runtests()
     return
 end
 
+function test_write_bool_model()
+    model = MiniZinc.Model{Bool}()
+    x = MOI.add_variable(model)
+    MOI.add_constraint(model, x, MOI.GreaterThan(true))
+    println(model)
+    println(sprint(write, model))
+    @test sprint(write, model) == """
+    var bool: x1;
+    constraint bool_eq(x1, true);
+    solve satisfy;
+    """
+    return
+end
+
 function test_write_bool()
     model = MiniZinc.Model{Int}()
     x, _ = MOI.add_constrained_variable(model, MOI.ZeroOne())
@@ -1052,7 +1066,7 @@ function test_model_filename()
     return
 end
 
-function test_model_nlp_boolean()
+function test_model_nonlinear_boolean()
     model = MOI.Utilities.Model{Int}()
     x = MOI.add_variables(model, 2)
     MOI.add_constraint.(model, x, MOI.ZeroOne())
@@ -1075,8 +1089,8 @@ function test_model_nlp_boolean()
     return
 end
 
-function test_model_nlp_boolean_nested()
-    model = MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Int}())
+function test_model_nonlinear_boolean_nested()
+    model = MOI.Utilities.Model{Int}()
     x = MOI.add_variables(model, 2)
     MOI.add_constraint.(model, x, MOI.ZeroOne())
     y = MOI.add_variable(model)
@@ -1103,8 +1117,8 @@ function test_model_nlp_boolean_nested()
     return
 end
 
-function test_model_nlp_boolean_jump()
-    model = MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Int}())
+function test_model_nonlinear_boolean_jump()
+    model = MOI.Utilities.Model{Int}()
     x = MOI.add_variables(model, 2)
     MOI.add_constraint.(model, x, MOI.ZeroOne())
     for (f, c) in [(:||, 1), (:&&, 0)]
@@ -1127,8 +1141,8 @@ function test_model_nlp_boolean_jump()
     return
 end
 
-function test_model_nlp_boolean_nested_not()
-    model = MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Int}())
+function test_model_nonlinear_boolean_nested_not()
+    model = MOI.Utilities.Model{Int}()
     x = MOI.add_variables(model, 3)
     MOI.add_constraint.(model, x, MOI.ZeroOne())
     # x1 => !(x2 ⊻ x3)
