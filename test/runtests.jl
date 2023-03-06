@@ -827,9 +827,9 @@ function test_model_unsupported_vectoraffine_constraint()
     model = MiniZinc.Model{Int}()
     x = MOI.add_variables(model, 2)
     f = MOI.Utilities.operate(vcat, Int, x[1], 2 * x[2])
-    @test MOI.supports_constraint(model, typeof(f), MOI.AllDifferent) == false
+    @test !MOI.supports_constraint(model, typeof(f), MOI.AllDifferent)
     set = MOI.Reified(MOI.GreaterThan(1))
-    @test MOI.supports_constraint(model, typeof(f), typeof(set)) == true
+    @test MOI.supports_constraint(model, typeof(f), typeof(set))
     return
 end
 
@@ -1048,16 +1048,13 @@ function test_model_filename()
 end
 
 function test_model_nlp_boolean()
-    model = MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Int}())
+    model = MOI.Utilities.Model{Int}()
     x = MOI.add_variables(model, 2)
     MOI.add_constraint.(model, x, MOI.ZeroOne())
-    nlp = MOI.Nonlinear.Model()
-    a, b = x
-    MOI.Nonlinear.add_constraint(nlp, :(($a || $b)), MOI.EqualTo(1.0))
-    MOI.Nonlinear.add_constraint(nlp, :(($a && $b)), MOI.EqualTo(0.0))
-    backend = MOI.Nonlinear.ExprGraphOnly()
-    evaluator = MOI.Nonlinear.Evaluator(nlp, backend, x)
-    MOI.set(model, MOI.NLPBlock(), MOI.NLPBlockData(evaluator))
+    for (f, c) in [(:||, 1), (:&&, 0)]
+        snf = MOI.ScalarNonlinearFunction{Int}(f, Any[x...])
+        MOI.add_constraint(model, snf, MOI.EqualTo(c))
+    end
     solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
     MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
     index_map, _ = MOI.optimize!(solver, model)
@@ -1065,8 +1062,8 @@ function test_model_nlp_boolean()
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     y = [index_map[v] for v in x]
     sol = round.(Bool, MOI.get(solver, MOI.VariablePrimal(), y))
-    @test (sol[1] || sol[2]) == true
-    @test (sol[1] && sol[2]) == false
+    @test (sol[1] || sol[2])
+    @test !(sol[1] && sol[2])
     @test read("test.mzn", String) ==
           "var bool: x1;\nvar bool: x2;\nconstraint (x1 \\/ x2) == true;\nconstraint (x1 /\\ x2) == false;\nsolve satisfy;\n"
     rm("test.mzn")
@@ -1080,18 +1077,11 @@ function test_model_nlp_boolean_nested()
     y = MOI.add_variable(model)
     MOI.add_constraint(model, y, MOI.Integer())
     MOI.add_constraint(model, y, MOI.Interval(0, 10))
-    nlp = MOI.Nonlinear.Model()
-    a, b = x
-    # a || (b && (y < 5))
-    MOI.Nonlinear.add_constraint(
-        nlp,
-        :(($a || ($b && ($y < 5)))),
-        MOI.EqualTo(1.0),
-    )
-    MOI.Nonlinear.add_constraint(nlp, :($a < 1), MOI.EqualTo(1.0))
-    backend = MOI.Nonlinear.ExprGraphOnly()
-    evaluator = MOI.Nonlinear.Evaluator(nlp, backend, x)
-    MOI.set(model, MOI.NLPBlock(), MOI.NLPBlockData(evaluator))
+    SNF(f::Symbol, args...) = MOI.ScalarNonlinearFunction{Int}(f, Any[args...])
+    # x[1] || (x[2] && (y < 5))
+    snf = SNF(:||, x[1], SNF(:&&, x[2], SNF(:<, y, 5)))
+    MOI.add_constraint(model, snf, MOI.EqualTo(1))
+    MOI.add_constraint(model, SNF(:<, x[1], 1), MOI.EqualTo(1))
     solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
     MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
     index_map, _ = MOI.optimize!(solver, model)
@@ -1103,7 +1093,7 @@ function test_model_nlp_boolean_nested()
     @test sol[2] == 1
     @test sol[3] < 5
     @test read("test.mzn", String) ==
-          "var bool: x1;\nvar bool: x2;\nvar 0 .. 10: x3;\nconstraint (x1 \\/ (x2 /\\ (x3 < 5))) == true;\nconstraint (x1 < 1) == true;\nsolve satisfy;\n"
+          "var 0 .. 10: x1;\nvar bool: x2;\nvar bool: x3;\nconstraint (x2 \\/ (x3 /\\ (x1 < 5))) == true;\nconstraint (x2 < 1) == true;\nsolve satisfy;\n"
     rm("test.mzn")
     return
 end
@@ -1112,13 +1102,11 @@ function test_model_nlp_boolean_jump()
     model = MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Int}())
     x = MOI.add_variables(model, 2)
     MOI.add_constraint.(model, x, MOI.ZeroOne())
-    nlp = MOI.Nonlinear.Model()
-    a, b = x
-    MOI.Nonlinear.add_constraint(nlp, :(($a || $b) - 1.0), MOI.EqualTo(0.0))
-    MOI.Nonlinear.add_constraint(nlp, :(($a && $b) - 0.0), MOI.EqualTo(0.0))
-    backend = MOI.Nonlinear.ExprGraphOnly()
-    evaluator = MOI.Nonlinear.Evaluator(nlp, backend, x)
-    MOI.set(model, MOI.NLPBlock(), MOI.NLPBlockData(evaluator))
+    for (f, c) in [(:||, 1), (:&&, 0)]
+        snf1 = MOI.ScalarNonlinearFunction{Int}(f, Any[x...])
+        snf2 = MOI.ScalarNonlinearFunction{Int}(:-, Any[snf1, c])
+        MOI.add_constraint(model, snf2, MOI.EqualTo(0))
+    end
     solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
     MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
     index_map, _ = MOI.optimize!(solver, model)
@@ -1126,28 +1114,23 @@ function test_model_nlp_boolean_jump()
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     y = [index_map[v] for v in x]
     sol = round.(Bool, MOI.get(solver, MOI.VariablePrimal(), y))
-    @test (sol[1] || sol[2]) == true
-    @test (sol[1] && sol[2]) == false
+    @test (sol[1] || sol[2])
+    @test !(sol[1] && sol[2])
     @test read("test.mzn", String) ==
           "var bool: x1;\nvar bool: x2;\nconstraint ((x1 \\/ x2) - 1) == false;\nconstraint ((x1 /\\ x2) - 0) == false;\nsolve satisfy;\n"
     rm("test.mzn")
     return
 end
 
-function test_model_nlp_boolean_registered()
+function test_model_nlp_boolean_nested_not()
     model = MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Int}())
     x = MOI.add_variables(model, 3)
     MOI.add_constraint.(model, x, MOI.ZeroOne())
-    nlp = MOI.Nonlinear.Model()
-    f(args...) = error("evaluation not supported")
-    MOI.Nonlinear.register_operator(nlp, :!, 1, f, f, f)
-    MOI.Nonlinear.register_operator(nlp, :⊻, 2, f, f, f)
-    MOI.Nonlinear.register_operator(nlp, :(=>), 2, f, f, f)
-    a, b, c = x
-    MOI.Nonlinear.add_constraint(nlp, :(($a => !($b ⊻ $c))), MOI.EqualTo(1.0))
-    backend = MOI.Nonlinear.ExprGraphOnly()
-    evaluator = MOI.Nonlinear.Evaluator(nlp, backend, x)
-    MOI.set(model, MOI.NLPBlock(), MOI.NLPBlockData(evaluator))
+    # x1 => !(x2 ⊻ x3)
+    snf1 = MOI.ScalarNonlinearFunction{Int}(:⊻, Any[x[2], x[3]])
+    snf2 = MOI.ScalarNonlinearFunction{Int}(:!, Any[snf1])
+    snf3 = MOI.ScalarNonlinearFunction{Int}(:(=>), Any[x[1], snf2])
+    MOI.add_constraint(model, snf3, MOI.EqualTo(1))
     solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
     MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
     index_map, _ = MOI.optimize!(solver, model)

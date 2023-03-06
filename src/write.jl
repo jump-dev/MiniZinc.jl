@@ -442,85 +442,44 @@ function _write_constraint(
     return
 end
 
-function _write_nlp_constraint(io::IO, variables, expr::Expr)
+function _write_constraint(
+    io::IO,
+    variables,
+    f::MOI.ScalarNonlinearFunction{T},
+    s::MOI.EqualTo{T},
+) where {T}
     print(io, "constraint ")
-    if Meta.isexpr(expr, :call, 3)
-        @assert expr.args[1] in (:(<=), :(>=), :(<), :(>), :(==))
-        _write_expression(io, variables, expr.args[2])
-        rhs = expr.args[3]
-        if isone(rhs)
-            println(io, " $(expr.args[1]) true;")
-        else
-            @assert iszero(rhs)
-            println(io, " $(expr.args[1]) false;")
-        end
+    _write_expression(io, variables, f)
+    if isone(s.value)
+        println(io, " == true;")
     else
-        @assert Meta.isexpr(expr, :comparison, 5)
-        error("Two sided not supported")
+        @assert iszero(s.value)
+        println(io, " == false;")
     end
     return
 end
 
-function _write_logical_expression(io::IO, variables, expr::Expr)
-    ops = Dict(:|| => "\\/", :&& => "/\\")
-    op = get(ops, expr.head, nothing)
-    @assert op !== nothing
+function _write_expression(
+    io::IO,
+    variables,
+    f::MOI.ScalarNonlinearFunction{T},
+) where {T}
+    op = get(_INFIX_OPS, f.head, nothing)
+    if op !== nothing
+        @assert length(f.args) > 1
+    else
+        @assert length(f.args) == 1
+        op = get(_PREFIX_OPS, f.head, nothing)
+        @assert op !== nothing
+        print(io, op)
+    end
     print(io, "(")
-    _write_expression(io, variables, expr.args[1])
-    for i in 2:length(expr.args)
+    _write_expression(io, variables, f.args[1])
+    for i in 2:length(f.args)
         print(io, " ", op, " ")
-        _write_expression(io, variables, expr.args[i])
+        _write_expression(io, variables, f.args[i])
     end
     print(io, ")")
-    return
-end
-
-_INFIX_OPS = Dict(
-    :- => "-",
-    :+ => "+",
-    :* => "*",
-    :(<) => "<",
-    :(>) => ">",
-    :(<=) => "<=",
-    :(>=) => ">=",
-    :(=>) => "->",
-    :⊻ => "xor",
-)
-
-_PREFIX_OPS = Dict(:(!) => "not")
-
-function _write_call_expression(io::IO, variables, expr::Expr)
-    op = get(_INFIX_OPS, expr.args[1], nothing)
-    if op !== nothing
-        print(io, "(")
-        _write_expression(io, variables, expr.args[2])
-        for i in 3:length(expr.args)
-            print(io, " ", op, " ")
-            _write_expression(io, variables, expr.args[i])
-        end
-        print(io, ")")
-    else
-        op = get(_PREFIX_OPS, expr.args[1], nothing)
-        @assert op !== nothing
-        print(io, op, "(")
-        _write_expression(io, variables, expr.args[2])
-        print(io, ")")
-    end
-    return
-end
-
-function _write_expression(io::IO, variables, expr::Expr)
-    if Meta.isexpr(expr, :ref)
-        @assert expr.args[1] == :x
-        _write_expression(io, variables, expr.args[2])
-        return
-    end
-    if Meta.isexpr(expr, :||) || Meta.isexpr(expr, :&&)
-        _write_logical_expression(io, variables, expr)
-    else
-        @assert Meta.isexpr(expr, :call)
-        _write_call_expression(io, variables, expr)
-    end
     return
 end
 
@@ -533,6 +492,22 @@ function _write_expression(io::IO, _, x::Real)
     print(io, isinteger(x) ? round(Int, x) : x)
     return
 end
+
+_PREFIX_OPS = Dict(:(!) => "not")
+
+_INFIX_OPS = Dict(
+    :|| => "\\/",
+    :&& => "/\\",
+    :- => "-",
+    :+ => "+",
+    :* => "*",
+    :(<) => "<",
+    :(>) => ">",
+    :(<=) => "<=",
+    :(>=) => ">=",
+    :(=>) => "->",
+    :⊻ => "xor",
+)
 
 function Base.write(io::IO, model::Model{T}) where {T}
     rs = [
@@ -554,14 +529,6 @@ function Base.write(io::IO, model::Model{T}) where {T}
             f = MOI.get(model, MOI.ConstraintFunction(), ci)
             s = MOI.get(model, MOI.ConstraintSet(), ci)
             _write_constraint(io, variables, f, s)
-        end
-    end
-    nlp_block = get(model.ext, :nlp_block, nothing)
-    if nlp_block !== nothing
-        MOI.initialize(nlp_block.evaluator, [:ExprGraph])
-        for i in 1:length(nlp_block.constraint_bounds)
-            expr = MOI.constraint_expr(nlp_block.evaluator, i)
-            _write_nlp_constraint(io, variables, expr)
         end
     end
     sense = MOI.get(model, MOI.ObjectiveSense())
