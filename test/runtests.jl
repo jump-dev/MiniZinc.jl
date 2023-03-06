@@ -1083,8 +1083,8 @@ function test_model_nonlinear_boolean()
     sol = round.(Bool, MOI.get(solver, MOI.VariablePrimal(), y))
     @test (sol[1] || sol[2])
     @test !(sol[1] && sol[2])
-    # @test read("test.mzn", String) ==
-    #       "var bool: x1;\nvar bool: x2;\nconstraint (x1 \\/ x2) == true;\nconstraint (x1 /\\ x2) == false;\nsolve satisfy;\n"
+    @test read("test.mzn", String) ==
+          "var bool: x1;\nvar bool: x2;\nconstraint (x1 \\/ x2) = 1;\nconstraint (x1 /\\ x2) = 0;\nsolve satisfy;\n"
     rm("test.mzn")
     return
 end
