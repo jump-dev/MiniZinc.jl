@@ -455,24 +455,40 @@ function _write_constraint(
 end
 
 function _write_expression(io::IO, variables, f::MOI.ScalarNonlinearFunction)
-    op = get(_INFIX_OPS, f.head, nothing)
-    if op !== nothing
+    if haskey(_INFIX_OPS, f.head)
+        # infix operator
+        op = _INFIX_OPS[f.head]
         @assert length(f.args) > 1
-    else
-        @assert length(f.args) == 1
-        op = get(_PREFIX_OPS, f.head, nothing)
-        if op === nothing
-            throw(MOI.UnsupportedNonlinearOperator(f.head))
+        print(io, "(")
+        _write_expression(io, variables, f.args[1])
+        for i in 2:length(f.args)
+            print(io, " ", op, " ")
+            _write_expression(io, variables, f.args[i])
         end
-        print(io, op)
+        print(io, ")")
+    elseif haskey(_PREFIX_OPS, f.head)
+        # prefix operator
+        op = _PREFIX_OPS[f.head]
+        print(io, op, "(")
+        _write_expression(io, variables, f.args[1])
+        for i in 2:length(f.args)
+            print(io, ", ")
+            _write_expression(io, variables, f.args[i])
+        end
+        print(io, ")")
+    elseif haskey(_VECTOR_ARG_OPS, f.head)
+        # vector argument operator
+        op = _VECTOR_ARG_OPS[f.head]
+        print(io, op, "([")
+        _write_expression(io, variables, f.args[1])
+        for i in 2:length(f.args)
+            print(io, ", ")
+            _write_expression(io, variables, f.args[i])
+        end
+        print(io, "])")
+    else
+        throw(MOI.UnsupportedNonlinearOperator(f.head))
     end
-    print(io, "(")
-    _write_expression(io, variables, f.args[1])
-    for i in 2:length(f.args)
-        print(io, " ", op, " ")
-        _write_expression(io, variables, f.args[i])
-    end
-    print(io, ")")
     return
 end
 

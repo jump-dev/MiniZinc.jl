@@ -1164,6 +1164,57 @@ function test_model_nonlinear_boolean_nested_not()
     return
 end
 
+function test_model_nonlinear_bool_model()
+    model = MOI.Utilities.Model{Bool}()
+    x = MOI.add_variables(model, 3)
+    # x1 <--> !(x2 <-- x3)
+    snf1 = MOI.ScalarNonlinearFunction(:(<--), Any[x[2], x[3]])
+    snf2 = MOI.ScalarNonlinearFunction(:!, Any[snf1])
+    snf3 = MOI.ScalarNonlinearFunction(:(<-->), Any[x[1], snf2])
+    MOI.add_constraint(model, snf3, MOI.EqualTo(true))
+    solver = MiniZinc.Optimizer{Bool}(MiniZinc.Chuffed())
+    MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ResultCount()) >= 1
+    y = [index_map[v] for v in x]
+    sol = MOI.get(solver, MOI.VariablePrimal(), y)
+    @test sol[1] == !ifelse(sol[3], sol[2], true)
+    @test read("test.mzn", String) ==
+          "var bool: x1;\nvar bool: x2;\nvar bool: x3;\nconstraint (x1 <-> not((x2 <- x3))) = true;\nsolve satisfy;\n"
+    rm("test.mzn")
+    return
+end
+
+function test_model_nonlinear_bool_vector_arg()
+    model = MOI.Utilities.Model{Int}()
+    x1 = MOI.add_variables(model, 3)
+    MOI.add_constraint.(model, x1, MOI.ZeroOne())
+    x2 = MOI.add_variables(model, 3)
+    MOI.add_constraint.(model, x2, MOI.ZeroOne())
+    # ∀(∃(x1), ∃(x2))
+    snf1 = MOI.ScalarNonlinearFunction(:∃, Any[x1...])
+    snf2 = MOI.ScalarNonlinearFunction(:∃, Any[x2...])
+    snf3 = MOI.ScalarNonlinearFunction(:∀, Any[snf1, snf2])
+    MOI.add_constraint(model, snf3, MOI.EqualTo(1))
+    # count(x1..., x2...) = 2
+    snf = MOI.ScalarNonlinearFunction(:count, Any[x1..., x2...])
+    MOI.add_constraint(model, snf, MOI.EqualTo(2))
+    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ResultCount()) >= 1
+    y1 = MOI.get(solver, MOI.VariablePrimal(), [index_map[v] for v in x1])
+    y2 = MOI.get(solver, MOI.VariablePrimal(), [index_map[v] for v in x2])
+    @test sum(y1) == 1
+    @test sum(y2) == 1
+    @test read("test.mzn", String) ==
+          "var bool: x1;\nvar bool: x2;\nvar bool: x3;\nvar bool: x4;\nvar bool: x5;\nvar bool: x6;\nconstraint forall([exists([x1, x2, x3]), exists([x4, x5, x6])]) = 1;\nconstraint count([x1, x2, x3, x4, x5, x6]) = 2;\nsolve satisfy;\n"
+    rm("test.mzn")
+    return
+end
+
 function test_unsupported_nonlinear_operator()
     model = MOI.Utilities.Model{Int}()
     x = MOI.add_variable(model)
@@ -1182,10 +1233,14 @@ end
 function test_supported_operators()
     model = MiniZinc.Model{Int}()
     ops = MOI.get(model, MOI.ListOfSupportedNonlinearOperators())
+    @test ops isa Vector{Symbol}
     @test :(!) in ops
     @test :|| in ops
     @test :* in ops
     @test :⊻ in ops
+    @test :(<-->) in ops
+    @test :∀ in ops
+    @test :count in ops
     return
 end
 

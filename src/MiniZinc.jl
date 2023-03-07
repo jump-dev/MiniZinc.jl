@@ -81,12 +81,19 @@ _INFIX_OPS = Dict(
     :(>) => ">",
     :(<=) => "<=",
     :(>=) => ">=",
+    :(<-->) => "<->",
     :(=>) => "->",
+    :(-->) => "->",
+    :(<--) => "<-",
     :⊻ => "xor",
 )
 
-_SUPPORTED_OPS =
-    reduce(vcat, collect(keys(d)) for d in [_PREFIX_OPS, _INFIX_OPS])
+_VECTOR_ARG_OPS = Dict(:∃ => "exists", :∀ => "forall", :count => "count")
+
+_SUPPORTED_OPS = reduce(
+    vcat,
+    collect(keys(d)) for d in [_PREFIX_OPS, _INFIX_OPS, _VECTOR_ARG_OPS]
+)
 
 MOI.get(::Model, ::MOI.ListOfSupportedNonlinearOperators) = _SUPPORTED_OPS
 
