@@ -456,7 +456,6 @@ end
 
 function _write_expression(io::IO, variables, f::MOI.ScalarNonlinearFunction)
     if haskey(_INFIX_OPS, f.head)
-        # infix operator
         op = _INFIX_OPS[f.head]
         @assert length(f.args) > 1
         print(io, "(")
@@ -467,7 +466,6 @@ function _write_expression(io::IO, variables, f::MOI.ScalarNonlinearFunction)
         end
         print(io, ")")
     elseif haskey(_PREFIX_OPS, f.head)
-        # prefix operator
         op = _PREFIX_OPS[f.head]
         print(io, op, "(")
         _write_expression(io, variables, f.args[1])
@@ -476,19 +474,20 @@ function _write_expression(io::IO, variables, f::MOI.ScalarNonlinearFunction)
             _write_expression(io, variables, f.args[i])
         end
         print(io, ")")
-    elseif haskey(_VECTOR_ARG_OPS, f.head)
-        # vector argument operator
-        op = _VECTOR_ARG_OPS[f.head]
-        print(io, op, "([")
-        _write_expression(io, variables, f.args[1])
-        for i in 2:length(f.args)
-            print(io, ", ")
-            _write_expression(io, variables, f.args[i])
-        end
-        print(io, "])")
     else
         throw(MOI.UnsupportedNonlinearOperator(f.head))
     end
+    return
+end
+
+function _write_expression(io::IO, variables, x::Vector)
+    print(io, "[")
+    _write_expression(io, variables, x[1])
+    for i in 2:length(x)
+        print(io, ", ")
+        _write_expression(io, variables, x[i])
+    end
+    print(io, "]")
     return
 end
 

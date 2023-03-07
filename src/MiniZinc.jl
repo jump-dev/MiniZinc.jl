@@ -69,7 +69,7 @@ function MOI.supports_constraint(
     return true
 end
 
-_PREFIX_OPS = Dict(:(!) => "not")
+_PREFIX_OPS = Dict(:(!) => "not", :∃ => "exists", :∀ => "forall", :count => "count")
 
 _INFIX_OPS = Dict(
     :|| => "\\/",
@@ -88,11 +88,9 @@ _INFIX_OPS = Dict(
     :⊻ => "xor",
 )
 
-_VECTOR_ARG_OPS = Dict(:∃ => "exists", :∀ => "forall", :count => "count")
-
 _SUPPORTED_OPS = reduce(
     vcat,
-    collect(keys(d)) for d in [_PREFIX_OPS, _INFIX_OPS, _VECTOR_ARG_OPS]
+    collect(keys(d)) for d in [_PREFIX_OPS, _INFIX_OPS]
 )
 
 MOI.get(::Model, ::MOI.ListOfSupportedNonlinearOperators) = _SUPPORTED_OPS
