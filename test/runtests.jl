@@ -1190,10 +1190,10 @@ function test_model_nonlinear_bool_vector_arg()
     MOI.add_constraint.(model, x1, MOI.ZeroOne())
     x2 = MOI.add_variables(model, 3)
     MOI.add_constraint.(model, x2, MOI.ZeroOne())
-    # ∀([∃(x1), ∃(x2)])
-    snf1 = MOI.ScalarNonlinearFunction(:∃, Any[x1])
-    snf2 = MOI.ScalarNonlinearFunction(:∃, Any[x2])
-    snf3 = MOI.ScalarNonlinearFunction(:∀, Any[[snf1, snf2]])
+    # forall([exists(x1), exists(x2)])
+    snf1 = MOI.ScalarNonlinearFunction(:exists, Any[x1])
+    snf2 = MOI.ScalarNonlinearFunction(:exists, Any[x2])
+    snf3 = MOI.ScalarNonlinearFunction(:forall, Any[[snf1, snf2]])
     MOI.add_constraint(model, snf3, MOI.EqualTo(1))
     # count([x1..., x2...]) = 2
     snf = MOI.ScalarNonlinearFunction(:count, Any[[x1..., x2...]])
@@ -1237,7 +1237,7 @@ function test_supported_operators()
     @test :* in ops
     @test :⊻ in ops
     @test :(<-->) in ops
-    @test :∀ in ops
+    @test :forall in ops
     @test :count in ops
     return
 end

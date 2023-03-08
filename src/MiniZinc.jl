@@ -69,8 +69,12 @@ function MOI.supports_constraint(
     return true
 end
 
-_PREFIX_OPS =
-    Dict(:(!) => "not", :∃ => "exists", :∀ => "forall", :count => "count")
+_PREFIX_OPS = Dict(
+    :(!) => "not",
+    :exists => "exists",
+    :forall => "forall",
+    :count => "count",
+)
 
 _INFIX_OPS = Dict(
     :|| => "\\/",
