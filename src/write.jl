@@ -3,84 +3,6 @@
 # Use of this source code is governed by an MIT-style license that can be found
 # in the LICENSE.md file or at https://opensource.org/licenses/MIT.
 
-_write_predicates(io::IO, ::Type{<:MOI.AbstractSet}) = nothing
-
-function _write_predicates(
-    io::IO,
-    ::Type{<:Union{MOI.AllDifferent,MOI.Reified{MOI.AllDifferent}}},
-)
-    println(io, "include \"alldifferent.mzn\";")
-    return
-end
-
-function _write_predicates(
-    io::IO,
-    ::Type{<:Union{<:MOI.BinPacking,<:MOI.Reified{<:MOI.BinPacking}}},
-)
-    println(io, "include \"bin_packing.mzn\";")
-    return
-end
-
-# Reified{MOI.Circuit} is unsupported by MiniZinc
-function _write_predicates(io::IO, ::Type{MOI.Circuit})
-    println(io, "include \"circuit.mzn\";")
-    return
-end
-
-function _write_predicates(
-    io::IO,
-    ::Type{<:Union{MOI.CountAtLeast,MOI.Reified{MOI.CountAtLeast}}},
-)
-    println(io, "include \"at_least.mzn\";")
-    return
-end
-
-function _write_predicates(
-    io::IO,
-    ::Type{<:Union{MOI.CountBelongs,MOI.Reified{MOI.CountBelongs}}},
-)
-    println(io, "include \"among.mzn\";")
-    return
-end
-
-function _write_predicates(
-    io::IO,
-    ::Type{<:Union{MOI.CountDistinct,MOI.Reified{MOI.CountDistinct}}},
-)
-    println(io, "include \"nvalue.mzn\";")
-    return
-end
-
-function _write_predicates(
-    io::IO,
-    ::Type{<:Union{MOI.CountGreaterThan,MOI.Reified{MOI.CountGreaterThan}}},
-)
-    println(io, "include \"count_gt.mzn\";")
-    return
-end
-
-function _write_predicates(
-    io::IO,
-    ::Type{<:Union{MOI.Cumulative,MOI.Reified{MOI.Cumulative}}},
-)
-    println(io, "include \"cumulative.mzn\";")
-    return
-end
-
-# Reified{MOI.Path} is unsupported by MiniZinc
-function _write_predicates(io::IO, ::Type{MOI.Path})
-    println(io, "include \"path.mzn\";")
-    return
-end
-
-function _write_predicates(
-    io::IO,
-    ::Type{<:Union{<:MOI.Table,<:MOI.Reified{<:MOI.Table}}},
-)
-    println(io, "include \"table.mzn\";")
-    return
-end
-
 function _variable_info(model::Model{T}, x) where {T}
     name = MOI.get(model, MOI.VariableName(), x)
     F = MOI.VariableIndex
@@ -121,59 +43,57 @@ end
 function _write_variables(io::IO, model::Model{T}) where {T}
     all_variables = MOI.get(model, MOI.ListOfVariableIndices())
     variables = Dict(x => _variable_info(model, x) for x in all_variables)
-    constraint_lines = ""
     for x in all_variables
         info = variables[x]
         lb, ub = info.lb, info.ub
         if info.is_bool
-            print(io, "var bool: $(info.name);")
+            println(io, "var bool: $(info.name);")
             if ub == 0
-                constraint_lines *= "constraint bool_eq($(info.name), false);\n"
+                println(io, "constraint bool_eq($(info.name), false);")
             elseif lb == 1
-                constraint_lines *= "constraint bool_eq($(info.name), true);\n"
+                println(io, "constraint bool_eq($(info.name), true);")
             end
         elseif info.is_int
             if typemin(T) < lb && ub < typemax(T)
-                print(io, "var $lb .. $ub: $(info.name);")
+                println(io, "var $lb .. $ub: $(info.name);")
             else
-                print(io, "var int: $(info.name);")
+                println(io, "var int: $(info.name);")
                 if ub < typemax(T)
-                    constraint_lines *= "constraint int_le($(info.name), $ub);\n"
+                    println(io, "constraint int_le($(info.name), $ub);")
                 end
                 if typemin(T) < lb
-                    constraint_lines *= "constraint int_ge($(info.name), $lb);\n"
+                    println(io, "constraint int_ge($(info.name), $lb);")
                 end
             end
         else
             if typemin(T) < lb && ub < typemax(T)
-                print(io, "var $lb .. $ub: $(info.name);")
+                println(io, "var $lb .. $ub: $(info.name);")
             else
-                print(io, "var float: $(info.name);")
+                println(io, "var float: $(info.name);")
                 if ub < typemax(T)
-                    constraint_lines *= "constraint $(info.name) <= $ub;\n"
+                    println(io, "constraint $(info.name) <= $ub;")
                 end
                 if typemin(T) < lb
-                    constraint_lines *= "constraint $(info.name) >= $lb;\n"
+                    println(io, "constraint $(info.name) >= $lb;")
                 end
             end
         end
-        println(io)
     end
-    return variables, constraint_lines
+    return variables
 end
 
-_to_string(variables, f::MOI.VariableIndex; kwargs...) = variables[f].name
+_to_string(variables::Dict, f::MOI.VariableIndex; kwargs...) = variables[f].name
 
-function _to_string(variables, f::Vector{MOI.VariableIndex}; kwargs...)
+function _to_string(variables::Dict, f::Vector{MOI.VariableIndex}; kwargs...)
     return string("[", join([_to_string(variables, v) for v in f], ", "), "]")
 end
 
-function _to_string(variables, f::MOI.VectorOfVariables; kwargs...)
+function _to_string(variables::Dict, f::MOI.VectorOfVariables; kwargs...)
     return _to_string(variables, f.variables; kwargs...)
 end
 
 function _to_string(
-    variables,
+    variables::Dict,
     f::MOI.ScalarAffineFunction;
     include_constant::Bool = false,
 )
@@ -197,7 +117,8 @@ end
 
 function _write_constraint(
     io::IO,
-    variables,
+    predicates::Set,
+    variables::Dict,
     f::MOI.VectorOfVariables,
     s::Union{
         MOI.AllDifferent,
@@ -210,12 +131,14 @@ function _write_constraint(
     mzn = MiniZincSet(s)
     strs = [_to_string(variables, f.variables[field]) for field in mzn.fields]
     println(io, "constraint $(mzn.name)(", join(strs, ", "), ");")
+    push!(predicates, mzn.name)
     return
 end
 
 function _write_constraint(
     io::IO,
-    variables,
+    predicates::Set,
+    variables::Dict,
     f::MOI.VectorOfVariables,
     s::MOI.Reified{S2},
 ) where {
@@ -230,6 +153,7 @@ function _write_constraint(
     z = _to_string(variables, f.variables[1])
     strs = [_to_string(variables, f.variables[i.+1]) for i in mzn.fields]
     println(io, "constraint $z <-> $(mzn.name)(", join(strs, ", "), ");")
+    push!(predicates, mzn.name)
     return
 end
 
@@ -257,7 +181,8 @@ end
 
 function _write_constraint(
     io::IO,
-    variables,
+    predicates::Set,
+    variables::Dict,
     f::MOI.VectorOfVariables,
     s::MOI.CountBelongs,
 )
@@ -265,12 +190,14 @@ function _write_constraint(
     x = _to_string(variables, f.variables[2:end])
     v = string("{", join(sort([i for i in s.set]), ", "), "}")
     println(io, "constraint among(", n, ", ", x, ", ", v, ");")
+    push!(predicates, "among")
     return
 end
 
 function _write_constraint(
     io::IO,
-    variables,
+    predicates::Set,
+    variables::Dict,
     f::MOI.VectorOfVariables,
     s::MOI.Reified{MOI.CountBelongs},
 )
@@ -279,21 +206,19 @@ function _write_constraint(
     x = _to_string(variables, f.variables[3:end])
     v = string("{", join(sort([i for i in s.set.set]), ", "), "}")
     println(io, "constraint $b <-> among(", n, ", ", x, ", ", v, ");")
+    push!(predicates, "among")
     return
 end
 
-function _write_at_least(io, variables, f, s, offset)
+function _write_at_least(io::IO, variables::Dict, f::MOI.VectorOfVariables, s::MOI.CountAtLeast, offset::Int)
     print(io, "at_least(", s.n, ", [")
     prefix = ""
     for p in s.partitions
         print(io, prefix, "{")
         inner_prefix = ""
         for i in 1:p
-            print(
-                io,
-                inner_prefix,
-                _to_string(variables, f.variables[offset+i]),
-            )
+            v = _to_string(variables, f.variables[offset+i])
+            print(io, inner_prefix, v)
             inner_prefix = ", "
         end
         print(io, "}")
@@ -312,42 +237,49 @@ end
 
 function _write_constraint(
     io::IO,
-    variables,
+    predicates::Set,
+    variables::Dict,
     f::MOI.VectorOfVariables,
     s::MOI.CountAtLeast,
 )
     print(io, "constraint ")
     _write_at_least(io, variables, f, s, 0)
+    push!(predicates, "at_least")
     return
 end
 
 function _write_constraint(
     io::IO,
-    variables,
+    predicates::Set,
+    variables::Dict,
     f::MOI.VectorOfVariables,
     s::MOI.Reified{MOI.CountAtLeast},
 )
     b = _to_string(variables, f.variables[1])
     print(io, "constraint $b <-> ")
     _write_at_least(io, variables, f, s.set, 1)
+    push!(predicates, "at_least")
     return
 end
 
 function _write_constraint(
     io::IO,
-    variables,
+    predicates::Set,
+    variables::Dict,
     f::MOI.VectorOfVariables,
     s::MOI.BinPacking,
 )
     x = _to_string(variables, f.variables)
     print(io, "constraint bin_packing(", s.capacity, ", ", x, ", ")
     println(io, s.weights, ");")
+    push!(predicates, "bin_packing")
     return
 end
 
 function _write_constraint(
     io::IO,
-    variables,
+    predicates::Set,
+    variables::Dict,
     f::MOI.VectorOfVariables,
     s::MOI.Reified{<:MOI.BinPacking},
 )
@@ -355,12 +287,14 @@ function _write_constraint(
     x = _to_string(variables, f.variables[2:end])
     print(io, "constraint $b <-> bin_packing(", s.set.capacity, ", ", x, ", ")
     println(io, s.set.weights, ");")
+    push!(predicates, "bin_packing")
     return
 end
 
 function _write_constraint(
     io::IO,
-    variables,
+    predicates::Set,
+    variables::Dict,
     f::MOI.VectorOfVariables,
     s::MOI.Path,
 )
@@ -370,12 +304,14 @@ function _write_constraint(
     es = _to_string(variables, f.variables[(2+s.N).+(1:s.E)])
     print(io, "constraint path(", s.N, ", ", s.E, ", ", s.from, ", ")
     println(io, s.to, ", ", s1, ", ", t1, ", ", ns, ", ", es, ");")
+    push!(predicates, "path")
     return
 end
 
 function _write_constraint(
     io::IO,
-    variables,
+    predicates::Set,
+    variables::Dict,
     f::MOI.VectorOfVariables,
     s::MOI.Table,
 )
@@ -385,12 +321,14 @@ function _write_constraint(
         print(io, " ", join(s.table[i, :], ", "), " |")
     end
     println(io, "]);")
+    push!(predicates, "table")
     return
 end
 
 function _write_constraint(
     io::IO,
-    variables,
+    predicates::Set,
+    variables::Dict,
     f::MOI.VectorOfVariables,
     s::MOI.Reified{<:MOI.Table},
 )
@@ -401,6 +339,7 @@ function _write_constraint(
         print(io, " ", join(s.set.table[i, :], ", "), " |")
     end
     println(io, "]);")
+    push!(predicates, "table")
     return
 end
 
@@ -414,7 +353,8 @@ _rhs(s::MOI.EqualTo) = s.value
 
 function _write_constraint(
     io::IO,
-    variables,
+    ::Set,
+    variables::Dict,
     f::MOI.ScalarAffineFunction{T},
     s::Union{MOI.LessThan{T},MOI.GreaterThan{T},MOI.EqualTo{T}},
 ) where {T}
@@ -423,7 +363,7 @@ function _write_constraint(
     return
 end
 
-function _to_epigraph(variables, f::MOI.VectorAffineFunction)
+function _to_epigraph(variables::Dict, f::MOI.VectorAffineFunction)
     @assert MOI.output_dimension(f) == 2
     f_z, x = MOI.Utilities.eachscalar(f)
     z = convert(MOI.VariableIndex, f_z)
@@ -432,7 +372,8 @@ end
 
 function _write_constraint(
     io::IO,
-    variables,
+    ::Set,
+    variables::Dict,
     f::MOI.VectorAffineFunction{T},
     s::MOI.Reified{S2},
 ) where {T,S2<:Union{MOI.LessThan{T},MOI.GreaterThan{T},MOI.EqualTo{T}}}
@@ -444,59 +385,59 @@ end
 
 function _write_constraint(
     io::IO,
-    variables,
+    predicates::Set,
+    variables::Dict,
     f::MOI.ScalarNonlinearFunction,
     s::Union{MOI.LessThan{T},MOI.GreaterThan{T},MOI.EqualTo{T}},
 ) where {T}
     print(io, "constraint ")
-    _write_expression(io, variables, f)
+    _write_expression(io, predicates, variables, f)
     println(io, _sense(s), _rhs(s), ";")
     return
 end
 
-function _write_expression(io::IO, variables, f::MOI.ScalarNonlinearFunction)
+function _write_expression(io::IO, predicates::Set, variables::Dict, f::MOI.ScalarNonlinearFunction)
     if haskey(_INFIX_OPS, f.head)
         op = _INFIX_OPS[f.head]
         @assert length(f.args) > 1
-        print(io, "(")
-        _write_expression(io, variables, f.args[1])
-        for i in 2:length(f.args)
-            print(io, " ", op, " ")
-            _write_expression(io, variables, f.args[i])
-        end
-        print(io, ")")
+        sep = string(" ", op, " ")
     elseif haskey(_PREFIX_OPS, f.head)
         op = _PREFIX_OPS[f.head]
-        print(io, op, "(")
-        _write_expression(io, variables, f.args[1])
-        for i in 2:length(f.args)
-            print(io, ", ")
-            _write_expression(io, variables, f.args[i])
-        end
-        print(io, ")")
+        sep = string(", ")
+        print(io, op)
     else
         throw(MOI.UnsupportedNonlinearOperator(f.head))
+    end
+    print(io, "(")
+    _write_expression(io, predicates, variables, f.args[1])
+    for i in 2:length(f.args)
+        print(io, sep)
+        _write_expression(io, predicates, variables, f.args[i])
+    end
+    print(io, ")")
+    if op in _PREDICATE_NAMES
+        push!(predicates, op)
     end
     return
 end
 
-function _write_expression(io::IO, variables, x::Vector)
+function _write_expression(io::IO, predicates::Set, variables::Dict, x::Vector)
     print(io, "[")
-    _write_expression(io, variables, x[1])
+    _write_expression(io, predicates, variables, x[1])
     for i in 2:length(x)
         print(io, ", ")
-        _write_expression(io, variables, x[i])
+        _write_expression(io, predicates, variables, x[i])
     end
     print(io, "]")
     return
 end
 
-function _write_expression(io::IO, variables, x::MOI.VariableIndex)
+function _write_expression(io::IO, ::Set, variables::Dict, x::MOI.VariableIndex)
     print(io, _to_string(variables, x))
     return
 end
 
-function _write_expression(io::IO, _, x::Real)
+function _write_expression(io::IO, ::Set, ::Dict, x::Real)
     print(io, isinteger(x) ? round(Int, x) : x)
     return
 end
@@ -507,21 +448,20 @@ function Base.write(io::IO, model::Model{T}) where {T}
         s -> replace(s, r"[^A-Za-z0-9_]" => "_"),
     ]
     MOI.FileFormats.create_unique_variable_names(model, false, rs)
-    constraint_types = MOI.get(model, MOI.ListOfConstraintTypesPresent())
-    for S in unique(S for (_, S) in constraint_types)
-        _write_predicates(io, S)
-    end
-    variables, constraint_lines = _write_variables(io, model)
-    print(io, constraint_lines)
-    for (F, S) in constraint_types
+    variables = _write_variables(io, model)
+    predicates = Set{String}()
+    for (F, S) in MOI.get(model, MOI.ListOfConstraintTypesPresent())
         if F == MOI.VariableIndex
             continue
         end
         for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
             f = MOI.get(model, MOI.ConstraintFunction(), ci)
             s = MOI.get(model, MOI.ConstraintSet(), ci)
-            _write_constraint(io, variables, f, s)
+            _write_constraint(io, predicates, variables, f, s)
         end
+    end
+    for p in predicates
+        println(io, "include \"", p, ".mzn\";")
     end
     sense = MOI.get(model, MOI.ObjectiveSense())
     if sense == MOI.FEASIBILITY_SENSE
