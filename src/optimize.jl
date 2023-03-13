@@ -158,7 +158,7 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
             end
         end
     end
-    return (index_map, false)
+    return index_map, false
 end
 
 function MOI.get(model::Optimizer, ::MOI.VariablePrimal, x::MOI.VariableIndex)
