@@ -432,13 +432,13 @@ function _write_expression(io::IO, predicates::Set, variables::Dict, x::Vector)
     return
 end
 
-function _write_expression(io::IO, ::Set, variables::Dict, x::MOI.VariableIndex)
-    print(io, _to_string(variables, x))
+function _write_expression(io::IO, ::Set, ::Dict, x::Real)
+    print(io, isinteger(x) ? round(Int, x) : x)
     return
 end
 
-function _write_expression(io::IO, ::Set, ::Dict, x::Real)
-    print(io, isinteger(x) ? round(Int, x) : x)
+function _write_expression(io::IO, ::Set, variables::Dict, x)
+    print(io, _to_string(variables, x))
     return
 end
 

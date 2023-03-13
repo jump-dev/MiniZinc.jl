@@ -93,6 +93,7 @@ _INFIX_OPS = Dict(
     :⊻ => "xor",
     :(<-->) => "<->",
     :reified => "<->",
+    :(!=) => "!="
 )
 
 _SUPPORTED_OPS =

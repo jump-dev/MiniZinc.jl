@@ -1,6 +1,7 @@
 # send more money example
 
 function test_send_more_money()
+    # based on MiniZinc example send-more-money.mzn
     model = MOI.Utilities.Model{Int}()
     S, _ = MOI.add_constrained_variable(model, MOI.Interval(1, 9))
     E, _ = MOI.add_constrained_variable(model, MOI.Interval(0, 9))

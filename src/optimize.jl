@@ -32,13 +32,13 @@ Construct a new MiniZinc Optimizer.
 mutable struct Optimizer{T} <: MOI.AbstractOptimizer
     solver::String
     inner::Model{T}
-    has_solution::Bool
+    has_solution::Union{Bool,Nothing}
     primal_solution::Dict{MOI.VariableIndex,T}
     options::Dict{String,Any}
     function Optimizer{T}(solver::String) where {T}
         primal_solution = Dict{MOI.VariableIndex,T}()
         options = Dict{String,Any}("model_filename" => "")
-        return new(solver, Model{T}(), false, primal_solution, options)
+        return new(solver, Model{T}(), nothing, primal_solution, options)
     end
 end
 
@@ -90,7 +90,7 @@ MOI.is_empty(model::Optimizer) = MOI.is_empty(model.inner)
 function MOI.empty!(model::Optimizer)
     MOI.empty!(model.inner)
     empty!(model.inner.ext)
-    model.has_solution = false
+    model.has_solution = nothing
     empty!(model.primal_solution)
     return
 end
@@ -136,6 +136,8 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     index_map = MOI.copy_to(dest.inner, src)
     ret = _run_minizinc(dest)
     if isempty(ret)
+        dest.has_solution = nothing
+    elseif ret == "=====UNSATISFIABLE=====\n"
         dest.has_solution = false
     else
         variable_map = Dict(
@@ -159,23 +161,25 @@ function MOI.get(model::Optimizer, ::MOI.VariablePrimal, x::MOI.VariableIndex)
 end
 
 function MOI.get(model::Optimizer, ::MOI.TerminationStatus)
-    if model.has_solution
+    if model.has_solution === nothing
+        return MOI.OTHER_ERROR
+    elseif model.has_solution
         return MOI.OPTIMAL
     else
-        return MOI.OTHER_ERROR
+        return MOI.INFEASIBLE
     end
 end
 
 function MOI.get(model::Optimizer, ::MOI.PrimalStatus)
-    if model.has_solution
-        return MOI.FEASIBLE_POINT
-    else
+    if model.has_solution === nothing || !model.has_solution
         return MOI.NO_SOLUTION
+    else
+        return MOI.FEASIBLE_POINT
     end
 end
 
 MOI.get(::Optimizer, ::MOI.DualStatus) = MOI.NO_SOLUTION
 
 function MOI.get(model::Optimizer, ::MOI.ResultCount)
-    return model.has_solution ? 1 : 0
+    return model.has_solution === true ? 1 : 0
 end
