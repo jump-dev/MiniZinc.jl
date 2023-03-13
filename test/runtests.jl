@@ -937,7 +937,7 @@ function test_moi_var_domain_infeasible_fzn()
     @test MOI.is_valid(model, c1)
     @test MOI.is_valid(model, c2)
     solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
-    _, _ = MOI.optimize!(solver, model)
+    MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.INFEASIBLE
     @test MOI.get(solver, MOI.ResultCount()) == 0
     return
@@ -950,7 +950,7 @@ function test_moi_infeasible_fzn()
     MOI.add_constraint.(model, x, MOI.GreaterThan(1))
     MOI.add_constraint(model, sum(x, init = 0), MOI.LessThan(2))
     solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
-    _, _ = MOI.optimize!(solver, model)
+    MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.INFEASIBLE
     @test MOI.get(solver, MOI.ResultCount()) == 0
     return

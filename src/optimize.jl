@@ -142,7 +142,7 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     if !isempty(ret)
         m_stat = match(r"=====(.+)=====", ret)
         if m_stat !== nothing
-            @assert length(m_stat) == 1
+            @assert length(m_stat.captures) == 1
             dest.solver_status = m_stat[1]
         else
             variable_map = Dict(
