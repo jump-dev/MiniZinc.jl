@@ -62,7 +62,7 @@ function _write_variables(io::IO, model::Model{T}) where {T}
                     println(io, "constraint int_le($(info.name), $ub);")
                 end
                 if typemin(T) < lb
-                    println(io, "constraint int_ge($(info.name), $lb);")
+                    println(io, "constraint int_le($lb, $(info.name));")
                 end
             end
         else
@@ -210,7 +210,13 @@ function _write_constraint(
     return
 end
 
-function _write_at_least(io::IO, variables::Dict, f::MOI.VectorOfVariables, s::MOI.CountAtLeast, offset::Int)
+function _write_at_least(
+    io::IO,
+    variables::Dict,
+    f::MOI.VectorOfVariables,
+    s::MOI.CountAtLeast,
+    offset::Int,
+)
     print(io, "at_least(", s.n, ", [")
     prefix = ""
     for p in s.partitions
@@ -396,7 +402,12 @@ function _write_constraint(
     return
 end
 
-function _write_expression(io::IO, predicates::Set, variables::Dict, f::MOI.ScalarNonlinearFunction)
+function _write_expression(
+    io::IO,
+    predicates::Set,
+    variables::Dict,
+    f::MOI.ScalarNonlinearFunction,
+)
     if haskey(_INFIX_OPS, f.head)
         op = _INFIX_OPS[f.head]
         @assert length(f.args) > 1

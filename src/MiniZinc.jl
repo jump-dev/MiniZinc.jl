@@ -93,15 +93,13 @@ _INFIX_OPS = Dict(
     :⊻ => "xor",
     :(<-->) => "<->",
     :reified => "<->",
-    :(!=) => "!="
+    :(!=) => "!=",
 )
 
 _SUPPORTED_OPS =
     reduce(vcat, collect(keys(d)) for d in [_PREFIX_OPS, _INFIX_OPS])
 
-_PREDICATE_NAMES = Set([
-    "alldifferent",
-])
+_PREDICATE_NAMES = Set(["alldifferent"])
 
 MOI.get(::Model, ::MOI.ListOfSupportedNonlinearOperators) = _SUPPORTED_OPS
 
