@@ -86,7 +86,7 @@ function test_write_greaterthan()
     MOI.add_constraint(model, x, MOI.GreaterThan(1))
     @test sprint(write, model) == """
     var int: x1;
-    constraint int_ge(x1, 1);
+    constraint int_le(1, x1);
     solve satisfy;
     """
     return
@@ -927,7 +927,7 @@ function test_moi_basic_fzn()
     return
 end
 
-function test_moi_infeasible_fzn()
+function test_moi_var_domain_infeasible_fzn()
     model = MOI.Utilities.Model{Int}()
     x, x_int = MOI.add_constrained_variable(model, MOI.Integer())
     c1 = MOI.add_constraint(model, x, MOI.GreaterThan(5))
@@ -938,7 +938,20 @@ function test_moi_infeasible_fzn()
     @test MOI.is_valid(model, c2)
     solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
     _, _ = MOI.optimize!(solver, model)
-    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OTHER_ERROR
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.INFEASIBLE
+    @test MOI.get(solver, MOI.ResultCount()) == 0
+    return
+end
+
+function test_moi_infeasible_fzn()
+    model = MOI.Utilities.Model{Int}()
+    x = MOI.add_variables(model, 3)
+    MOI.add_constraint.(model, x, MOI.Integer())
+    MOI.add_constraint.(model, x, MOI.GreaterThan(1))
+    MOI.add_constraint(model, sum(x, init = 0), MOI.LessThan(2))
+    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    _, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.INFEASIBLE
     @test MOI.get(solver, MOI.ResultCount()) == 0
     return
 end

@@ -32,13 +32,13 @@ Construct a new MiniZinc Optimizer.
 mutable struct Optimizer{T} <: MOI.AbstractOptimizer
     solver::String
     inner::Model{T}
-    has_solution::Bool
+    solver_status::String
     primal_solution::Dict{MOI.VariableIndex,T}
     options::Dict{String,Any}
     function Optimizer{T}(solver::String) where {T}
         primal_solution = Dict{MOI.VariableIndex,T}()
         options = Dict{String,Any}("model_filename" => "")
-        return new(solver, Model{T}(), false, primal_solution, options)
+        return new(solver, Model{T}(), "", primal_solution, options)
     end
 end
 
@@ -68,15 +68,19 @@ function _run_minizinc(dest::Optimizer)
     if isempty(filename)
         filename = joinpath(dir, "model.mzn")
     end
-    output = joinpath(dir, "model.ozn")
     open(filename, "w") do io
         return write(io, dest.inner)
     end
+    output = joinpath(dir, "model.ozn")
+    _stdout = joinpath(dir, "_stdout.txt")
     _minizinc_exe() do exe
-        return run(`$(exe) --solver $(dest.solver) -o $(output) $(filename)`)
+        cmd = `$(exe) --solver $(dest.solver) -o $(output) $(filename)`
+        return run(pipeline(cmd, stdout = _stdout))
     end
     if isfile(output)
         return read(output, String)
+    elseif isfile(_stdout)
+        return read(_stdout, String)
     end
     return ""
 end
@@ -90,7 +94,7 @@ MOI.is_empty(model::Optimizer) = MOI.is_empty(model.inner)
 function MOI.empty!(model::Optimizer)
     MOI.empty!(model.inner)
     empty!(model.inner.ext)
-    model.has_solution = false
+    model.solver_status = ""
     empty!(model.primal_solution)
     return
 end
@@ -135,31 +139,40 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     empty!(dest.primal_solution)
     index_map = MOI.copy_to(dest.inner, src)
     ret = _run_minizinc(dest)
-    if isempty(ret)
-        dest.has_solution = false
-    else
-        variable_map = Dict(
-            MOI.get(dest.inner, MOI.VariableName(), x) => x for
-            x in MOI.get(src, MOI.ListOfVariableIndices())
-        )
-        dest.has_solution = true
-        for line in split(ret, "\n")
-            m = match(r"(.+) \= (.+)\;", line)
-            if m !== nothing
-                x = variable_map[m[1]]
-                dest.primal_solution[x] = _parse_result(T, m[2])
+    if !isempty(ret)
+        m_stat = match(r"=====(.+)=====", ret)
+        if m_stat !== nothing
+            @assert length(m_stat) == 1
+            dest.solver_status = m_stat[1]
+        else
+            variable_map = Dict(
+                MOI.get(dest.inner, MOI.VariableName(), x) => x for
+                x in MOI.get(src, MOI.ListOfVariableIndices())
+            )
+            for line in split(ret, "\n")
+                m_var = match(r"(.+) \= (.+)\;", line)
+                if m_var !== nothing
+                    x = variable_map[m_var[1]]
+                    dest.primal_solution[x] = _parse_result(T, m_var[2])
+                end
             end
         end
     end
-    return index_map, false
+    return (index_map, false)
 end
 
 function MOI.get(model::Optimizer, ::MOI.VariablePrimal, x::MOI.VariableIndex)
     return model.primal_solution[x]
 end
 
+function _has_solution(model::Optimizer)
+    return isempty(model.solver_status) && !isempty(model.primal_solution)
+end
+
 function MOI.get(model::Optimizer, ::MOI.TerminationStatus)
-    if model.has_solution
+    if model.solver_status == "UNSATISFIABLE"
+        return MOI.INFEASIBLE
+    elseif _has_solution(model)
         return MOI.OPTIMAL
     else
         return MOI.OTHER_ERROR
@@ -167,7 +180,7 @@ function MOI.get(model::Optimizer, ::MOI.TerminationStatus)
 end
 
 function MOI.get(model::Optimizer, ::MOI.PrimalStatus)
-    if model.has_solution
+    if _has_solution(model)
         return MOI.FEASIBLE_POINT
     else
         return MOI.NO_SOLUTION
@@ -177,5 +190,5 @@ end
 MOI.get(::Optimizer, ::MOI.DualStatus) = MOI.NO_SOLUTION
 
 function MOI.get(model::Optimizer, ::MOI.ResultCount)
-    return model.has_solution ? 1 : 0
+    return _has_solution(model) ? 1 : 0
 end
