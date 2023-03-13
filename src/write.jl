@@ -141,7 +141,7 @@ function _write_variables(io::IO, model::Model{T}) where {T}
                     constraint_lines *= "constraint int_le($(info.name), $ub);\n"
                 end
                 if typemin(T) < lb
-                    constraint_lines *= "constraint int_ge($(info.name), $lb);\n"
+                    constraint_lines *= "constraint int_le($lb, $(info.name));\n"
                 end
             end
         else
