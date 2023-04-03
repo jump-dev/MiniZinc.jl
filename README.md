@@ -1,13 +1,22 @@
 # MiniZinc.jl
 
-`MiniZinc.jl` is a wrapper for the [MiniZinc](https://www.minizinc.org)
-constraint modeling language.
+[MiniZinc.jl](https://github.com/jump-dev/MiniZinc.jl) is a wrapper for the
+[MiniZinc](https://www.minizinc.org) constraint modeling language.
 
 It provides a way to write MathOptInterface models to `.mzn` files, and a way to
 interact with `libminizinc`.
 
-*Note: This wrapper is maintained by the JuMP community and is not part of the
-MiniZinc project.*
+## Affiliation
+
+This wrapper is maintained by the JuMP community and is not part of the MiniZinc
+project.
+
+## License
+
+`MiniZinc.jl` is licensed under the [MIT License](https://github.com/jump-dev/MiniZinc.jl/blob/master/LICENSE.md).
+
+The underlying project, [MiniZinc/libminizinc](https://github.com/MiniZinc/libminizinc),
+is licensed under the [MPL 2.0 license](https://github.com/MiniZinc/libminizinc/blob/master/LICENSE.txt).
 
 ## Install
 
@@ -103,10 +112,61 @@ optimize!(model)
 @show value.(x)
 ```
 
+## MathOptInterface API
+
+The MiniZinc optimizer supports the following constraints and attributes.
+
+List of supported objective functions:
+
+ * [`MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}`](@ref)
+ * [`MOI.ObjectiveFunction{MOI.ScalarQuadraticFunction{Float64}}`](@ref)
+ * [`MOI.ObjectiveFunction{MOI.VariableIndex}`](@ref)
+ * [`MOI.ObjectiveFunction{MOI.VectorAffineFunction{Float64}}`](@ref)
+ * [`MOI.ObjectiveFunction{MOI.VectorOfVariables}`](@ref)
+ * [`MOI.ObjectiveFunction{MOI.VectorQuadraticFunction{Float64}}`](@ref)
+
+List of supported variable types:
+
+ * [`MOI.Reals`](@ref)
+
+List of supported constraint types:
+
+ * [`MOI.ScalarAffineFunction{Float64}`](@ref) in [`MOI.EqualTo{Float64}`](@ref)
+ * [`MOI.ScalarAffineFunction{Float64}`](@ref) in [`MOI.GreaterThan{Float64}`](@ref)
+ * [`MOI.ScalarAffineFunction{Float64}`](@ref) in [`MOI.Integer`](@ref)
+ * [`MOI.ScalarAffineFunction{Float64}`](@ref) in [`MOI.Interval{Float64}`](@ref)
+ * [`MOI.ScalarAffineFunction{Float64}`](@ref) in [`MOI.LessThan{Float64}`](@ref)
+ * [`MOI.ScalarAffineFunction{Float64}`](@ref) in [`MOI.ZeroOne`](@ref)
+ * [`MOI.VariableIndex`](@ref) in [`MOI.EqualTo{Float64}`](@ref)
+ * [`MOI.VariableIndex`](@ref) in [`MOI.GreaterThan{Float64}`](@ref)
+ * [`MOI.VariableIndex`](@ref) in [`MOI.Integer`](@ref)
+ * [`MOI.VariableIndex`](@ref) in [`MOI.Interval{Float64}`](@ref)
+ * [`MOI.VariableIndex`](@ref) in [`MOI.LessThan{Float64}`](@ref)
+ * [`MOI.VariableIndex`](@ref) in [`MOI.Parameter{Float64}`](@ref)
+ * [`MOI.VariableIndex`](@ref) in [`MOI.Semicontinuous{Float64}`](@ref)
+ * [`MOI.VariableIndex`](@ref) in [`MOI.Semiinteger{Float64}`](@ref)
+ * [`MOI.VariableIndex`](@ref) in [`MOI.ZeroOne`](@ref)
+ * [`MOI.VectorOfVariables`](@ref) in [`MOI.AllDifferent`](@ref)
+ * [`MOI.VectorOfVariables`](@ref) in [`MOI.BinPacking{Float64}`](@ref)
+ * [`MOI.VectorOfVariables`](@ref) in [`MOI.Circuit`](@ref)
+ * [`MOI.VectorOfVariables`](@ref) in [`MOI.CountAtLeast`](@ref)
+ * [`MOI.VectorOfVariables`](@ref) in [`MOI.CountBelongs`](@ref)
+ * [`MOI.VectorOfVariables`](@ref) in [`MOI.CountDistinct`](@ref)
+ * [`MOI.VectorOfVariables`](@ref) in [`MOI.CountGreaterThan`](@ref)
+ * [`MOI.VectorOfVariables`](@ref) in [`MOI.Cumulative`](@ref)
+ * [`MOI.VectorOfVariables`](@ref) in [`MOI.Path`](@ref)
+ * [`MOI.VectorOfVariables`](@ref) in [`MOI.Table{Float64}`](@ref)
+
+List of supported model attributes:
+
+ * [`MOI.NLPBlock()`](@ref)
+ * [`MOI.Name()`](@ref)
+ * [`MOI.ObjectiveSense()`](@ref)
+
 ## Options
 
-Set options using `MOI.RawOptimizerAttribute` in MOI or
-`set_optimizer_attribute` in JuMP.
+Set options using [`MOI.RawOptimizerAttribute`](@ref) in MOI or
+[`set_attribute`](@ref) in JuMP.
 
 `MiniZinc.jl` supports the following options:
 
