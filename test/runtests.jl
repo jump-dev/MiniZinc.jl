@@ -1181,6 +1181,12 @@ function test_model_solver_name()
     return
 end
 
+function test_write_bool()
+    model = MiniZinc.Model{Int}()
+    @test !MOI.supports(model, MOI.ObjectiveFunction{MOI.VectorOfVariables}())
+    return
+end
+
 end
 
 TestMiniZinc.runtests()

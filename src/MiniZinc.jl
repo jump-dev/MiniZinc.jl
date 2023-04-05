@@ -61,6 +61,20 @@ function MOI.supports_constraint(
     return false
 end
 
+function MOI.supports(
+    ::Model{T},
+    ::MOI.ObjectiveFunction{F},
+) where {
+    T,
+    F<:Union{
+        MOI.VectorOfVariables,
+        MOI.VectorAffineFunction{T},
+        MOI.VectorQuadraticFunction{T},
+    },
+}
+    return false
+end
+
 function MOI.supports_constraint(
     ::Model{T},
     ::Type{MOI.VectorAffineFunction{T}},

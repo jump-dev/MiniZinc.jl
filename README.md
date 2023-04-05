@@ -121,9 +121,6 @@ List of supported objective functions:
  * [`MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}`](@ref)
  * [`MOI.ObjectiveFunction{MOI.ScalarQuadraticFunction{Float64}}`](@ref)
  * [`MOI.ObjectiveFunction{MOI.VariableIndex}`](@ref)
- * [`MOI.ObjectiveFunction{MOI.VectorAffineFunction{Float64}}`](@ref)
- * [`MOI.ObjectiveFunction{MOI.VectorOfVariables}`](@ref)
- * [`MOI.ObjectiveFunction{MOI.VectorQuadraticFunction{Float64}}`](@ref)
 
 List of supported variable types:
 
