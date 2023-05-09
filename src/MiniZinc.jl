@@ -71,6 +71,7 @@ end
 
 _PREFIX_OPS = Dict(
     :(!) => "not",
+    :abs => "abs",
     :exists => "exists",
     :forall => "forall",
     :count => "count",
@@ -83,6 +84,9 @@ _INFIX_OPS = Dict(
     :- => "-",
     :+ => "+",
     :* => "*",
+    :∧ => "∧",
+    :(=) => "=",
+    :(==) => "=",
     :(<) => "<",
     :(>) => ">",
     :(<=) => "<=",
