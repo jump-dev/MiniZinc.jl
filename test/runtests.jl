@@ -377,6 +377,43 @@ function test_write_maximize_linear()
     return
 end
 
+function test_write_quadratic_objective()
+    model = MiniZinc.Model{Int}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), x, "x")
+    y, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), y, "y")
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+    f = 1 * x * x + 2 * x * y + y + 4
+    MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)
+    @show sprint(write, model)
+    @test sprint(write, model) == """
+    var int: x;
+    var int: y;
+    solve minimize 1*x*x + 2*x*y + 1*y + 4;
+    """
+    return
+end
+
+function test_write_nonlinear_objective()
+    model = MiniZinc.Model{Int}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), x, "x")
+    y, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), y, "y")
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+    f1 = MOI.ScalarNonlinearFunction(:abs, Any[x])
+    f2 = MOI.ScalarNonlinearFunction(:*, Any[f1, y])
+    MOI.set(model, MOI.ObjectiveFunction{typeof(f2)}(), f2)
+    @show sprint(write, model)
+    @test sprint(write, model) == """
+    var int: x;
+    var int: y;
+    solve minimize (abs(x) * y);
+    """
+    return
+end
+
 function test_write_alldifferent()
     model = MiniZinc.Model{Int}()
     x, _ = MOI.add_constrained_variable(model, MOI.Integer())
@@ -394,8 +431,8 @@ function test_write_alldifferent()
     var 1 .. 3: x;
     var 1 .. 3: y;
     constraint alldifferent([x, y]);
-    include "alldifferent.mzn";
     solve satisfy;
+    include "alldifferent.mzn";
     """
     return
 end
@@ -417,8 +454,8 @@ function test_write_alldifferent_reified()
     var 1 .. 3: y;
     var bool: z;
     constraint z <-> alldifferent([x, y]);
-    include "alldifferent.mzn";
     solve satisfy;
+    include "alldifferent.mzn";
     """
     return
 end
@@ -438,8 +475,8 @@ function test_write_nonlinear_alldifferent()
     var 1 .. 3: x;
     var 1 .. 3: y;
     constraint alldifferent([x, y]) = 1;
-    include "alldifferent.mzn";
     solve satisfy;
+    include "alldifferent.mzn";
     """
     return
 end
@@ -463,8 +500,8 @@ function test_write_nonlinear_alldifferent_reified()
     var 1 .. 3: y;
     var bool: z;
     constraint (z <-> alldifferent([x, y])) = 1;
-    include "alldifferent.mzn";
     solve satisfy;
+    include "alldifferent.mzn";
     """
     return
 end
@@ -484,8 +521,8 @@ function test_write_countdistinct()
     var 1 .. 4: x3;
     var 1 .. 4: x4;
     constraint nvalue(x1, [x2, x3, x4]);
-    include "nvalue.mzn";
     solve satisfy;
+    include "nvalue.mzn";
     """
     return
 end
@@ -512,8 +549,8 @@ function test_write_countdistinct_reified()
     var 1 .. 4: x4;
     var bool: b;
     constraint b <-> nvalue(x1, [x2, x3, x4]);
-    include "nvalue.mzn";
     solve satisfy;
+    include "nvalue.mzn";
     """
     return
 end
@@ -536,8 +573,8 @@ function test_write_countbelongs()
     var int: x3;
     var int: x4;
     constraint among(x1, [x2, x3, x4], {3, 4});
-    include "among.mzn";
     solve satisfy;
+    include "among.mzn";
     """
     return
 end
@@ -563,8 +600,8 @@ function test_write_countbelongs_reified()
     var int: x4;
     var bool: b;
     constraint b <-> among(x1, [x2, x3, x4], {3, 4});
-    include "among.mzn";
     solve satisfy;
+    include "among.mzn";
     """
     return
 end
@@ -590,8 +627,8 @@ function test_write_countatleast()
     var int: y;
     var int: z;
     constraint at_least(1, [{x, y}, {y, z}], {3});
-    include "at_least.mzn";
     solve satisfy;
+    include "at_least.mzn";
     """
     return
 end
@@ -620,8 +657,8 @@ function test_write_countatleast_reified()
     var int: z;
     var bool: b;
     constraint b <-> at_least(1, [{x, y}, {y, z}], {3});
-    include "at_least.mzn";
     solve satisfy;
+    include "at_least.mzn";
     """
     return
 end
@@ -648,8 +685,8 @@ function test_write_countgreaterthan()
     var int: x2;
     var int: x3;
     constraint count_gt([x1, x2, x3], y, c);
-    include "count_gt.mzn";
     solve satisfy;
+    include "count_gt.mzn";
     """
     return
 end
@@ -679,8 +716,8 @@ function test_write_countgreaterthan_reified()
     var int: x3;
     var bool: b;
     constraint b <-> count_gt([x1, x2, x3], y, c);
-    include "count_gt.mzn";
     solve satisfy;
+    include "count_gt.mzn";
     """
     return
 end
@@ -699,8 +736,8 @@ function test_write_binpacking()
     var int: x1;
     var int: x2;
     constraint bin_packing(2, [x1, x2], [3, 4]);
-    include "bin_packing.mzn";
     solve satisfy;
+    include "bin_packing.mzn";
     """
     return
 end
@@ -722,8 +759,8 @@ function test_write_binpacking_reified()
     var int: x2;
     var bool: b;
     constraint b <-> bin_packing(2, [x1, x2], [3, 4]);
-    include "bin_packing.mzn";
     solve satisfy;
+    include "bin_packing.mzn";
     """
     return
 end
@@ -765,8 +802,8 @@ function test_write_path()
     var bool: es4;
     var bool: es5;
     constraint path(4, 5, [1, 1, 2, 2, 3], [2, 3, 3, 4, 4], s, t, [ns1, ns2, ns3, ns4], [es1, es2, es3, es4, es5]);
-    include "path.mzn";
     solve satisfy;
+    include "path.mzn";
     """
     return
 end
@@ -800,8 +837,8 @@ function test_write_cumulative()
     var int: r3;
     var int: b;
     constraint cumulative([s1, s2, s3], [d1, d2, d3], [r1, r2, r3], b);
-    include "cumulative.mzn";
     solve satisfy;
+    include "cumulative.mzn";
     """
     return
 end
@@ -838,8 +875,8 @@ function test_write_cumulative_reified()
     var int: b;
     var bool: z;
     constraint z <-> cumulative([s1, s2, s3], [d1, d2, d3], [r1, r2, r3], b);
-    include "cumulative.mzn";
     solve satisfy;
+    include "cumulative.mzn";
     """
     return
 end
@@ -857,8 +894,8 @@ function test_write_table()
     var int: x2;
     var int: x3;
     constraint table([x1, x2, x3], [| 1, 1, 0 | 0, 1, 1 |]);
-    include "table.mzn";
     solve satisfy;
+    include "table.mzn";
     """
     return
 end
@@ -883,8 +920,8 @@ function test_write_table_reified()
     var int: x3;
     var bool: b;
     constraint b <-> table([x1, x2, x3], [| 1, 1, 0 | 0, 1, 1 |]);
-    include "table.mzn";
     solve satisfy;
+    include "table.mzn";
     """
     return
 end
@@ -917,8 +954,8 @@ function test_write_circuit()
     var int: x2;
     var int: x3;
     constraint circuit([x1, x2, x3]);
-    include "circuit.mzn";
     solve satisfy;
+    include "circuit.mzn";
     """
     return
 end
@@ -1270,7 +1307,7 @@ function test_model_nonlinear_alldifferent_reified()
     @test !allunique(xy_sol)
     @test iszero(z_sol)
     @test read("test.mzn", String) ==
-          "var bool: z;\nconstraint bool_eq(z, false);\nvar 1 .. 3: x;\nvar 1 .. 3: y;\nconstraint (z <-> alldifferent([x, y])) = 1;\ninclude \"alldifferent.mzn\";\nsolve satisfy;\n"
+          "var bool: z;\nconstraint bool_eq(z, false);\nvar 1 .. 3: x;\nvar 1 .. 3: y;\nconstraint (z <-> alldifferent([x, y])) = 1;\nsolve satisfy;\ninclude \"alldifferent.mzn\";\n"
     rm("test.mzn")
     return
 end

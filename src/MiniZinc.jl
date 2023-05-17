@@ -48,7 +48,7 @@ MOI.Utilities.@model(
         ReifiedEqualTo,
     ),
     (MOI.ScalarNonlinearFunction,),
-    (MOI.ScalarAffineFunction,),
+    (MOI.ScalarAffineFunction,MOI.ScalarQuadraticFunction),
     (MOI.VectorOfVariables,),
     (MOI.VectorAffineFunction,)
 )
@@ -76,6 +76,8 @@ _PREFIX_OPS = Dict(
     :forall => "forall",
     :count => "count",
     :alldifferent => "alldifferent",
+    :sum => "sum",
+    :bool2int => "bool2int",
 )
 
 _INFIX_OPS = Dict(

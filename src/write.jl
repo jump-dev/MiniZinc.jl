@@ -110,6 +110,37 @@ function _to_string(
     return ret
 end
 
+function _to_string(
+    variables::Dict,
+    f::MOI.ScalarQuadraticFunction;
+    include_constant::Bool = false,
+)
+    ret = ""
+    prefix = ""
+    for t in f.quadratic_terms
+        name_1 = _to_string(variables, t.variable_1)
+        name_2 = _to_string(variables, t.variable_2)
+        coef = t.coefficient
+        if name_1 == name_2
+            coef /= 2
+            if isinteger(coef)
+                coef = convert(Int, coef)
+            end
+        end
+        ret *= "$(prefix)$(coef)*$name_1*$name_2"
+        prefix = " + "
+    end
+    for t in f.affine_terms
+        name = _to_string(variables, t.variable)
+        ret *= "$(prefix)$(t.coefficient)*$name"
+        prefix = " + "
+    end
+    if include_constant
+        ret *= " + $(f.constant)"
+    end
+    return ret
+end
+
 struct MiniZincSet <: MOI.AbstractSet
     name::String
     fields::Vector{Union{Int,UnitRange{Int}}}
@@ -361,7 +392,7 @@ function _write_constraint(
     io::IO,
     ::Set,
     variables::Dict,
-    f::MOI.ScalarAffineFunction{T},
+    f::Union{MOI.ScalarAffineFunction{T},MOI.ScalarQuadraticFunction{T}},
     s::Union{MOI.LessThan{T},MOI.GreaterThan{T},MOI.EqualTo{T}},
 ) where {T}
     print(io, "constraint ", _to_string(variables, f))
@@ -448,8 +479,8 @@ function _write_expression(io::IO, ::Set, ::Dict, x::Real)
     return
 end
 
-function _write_expression(io::IO, ::Set, variables::Dict, x)
-    print(io, _to_string(variables, x))
+function _write_expression(io::IO, ::Set, variables::Dict, f)
+    print(io, _to_string(variables, f; include_constant = true))
     return
 end
 
@@ -471,9 +502,6 @@ function Base.write(io::IO, model::Model{T}) where {T}
             _write_constraint(io, predicates, variables, f, s)
         end
     end
-    for p in predicates
-        println(io, "include \"", p, ".mzn\";")
-    end
     sense = MOI.get(model, MOI.ObjectiveSense())
     if sense == MOI.FEASIBILITY_SENSE
         println(io, "solve satisfy;")
@@ -482,8 +510,11 @@ function Base.write(io::IO, model::Model{T}) where {T}
         print(io, sense == MOI.MAX_SENSE ? "maximize " : "minimize ")
         F = MOI.get(model, MOI.ObjectiveFunctionType())
         f = MOI.get(model, MOI.ObjectiveFunction{F}())
-        print(io, _to_string(variables, f; include_constant = true))
+        _write_expression(io, predicates, variables, f)
         println(io, ";")
+    end
+    for p in predicates
+        println(io, "include \"", p, ".mzn\";")
     end
     return
 end
