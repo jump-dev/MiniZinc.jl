@@ -26,9 +26,8 @@ function test_louvain()
     for (u, v, w) in edges
         o = 2 * m * w - k[u] * k[v]
         f1 = MOI.ScalarNonlinearFunction(:(=), Any[x[u], x[v]])
-        f2 = MOI.ScalarNonlinearFunction(:bool2int, Any[f1])
-        f3 = MOI.ScalarNonlinearFunction(:*, Any[f2, o])
-        push!(terms, f3)
+        f2 = MOI.ScalarNonlinearFunction(:ifelse, Any[f1, o, 0])
+        push!(terms, f2)
     end
     f = MOI.ScalarNonlinearFunction(:+, terms)
     MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)

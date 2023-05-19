@@ -439,7 +439,10 @@ function _write_expression(
     variables::Dict,
     f::MOI.ScalarNonlinearFunction,
 )
-    if haskey(_INFIX_OPS, f.head)
+    if f.head == :ifelse
+        _write_ifelse(io, predicates, variables, f.args)
+        return
+    elseif haskey(_INFIX_OPS, f.head)
         op = _INFIX_OPS[f.head]
         @assert length(f.args) > 1
         sep = string(" ", op, " ")
@@ -481,6 +484,22 @@ end
 
 function _write_expression(io::IO, ::Set, variables::Dict, f)
     print(io, _to_string(variables, f; include_constant = true))
+    return
+end
+
+function _write_ifelse(
+    io::IO,
+    predicates::Set,
+    variables::Dict,
+    args::Vector{Any},
+)
+    print(io, "(if ")
+    _write_expression(io, predicates, variables, args[1])
+    print(io, " then ")
+    _write_expression(io, predicates, variables, args[2])
+    print(io, " else ")
+    _write_expression(io, predicates, variables, args[3])
+    print(io, " endif)")
     return
 end
 

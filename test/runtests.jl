@@ -926,6 +926,24 @@ function test_write_table_reified()
     return
 end
 
+function test_write_nonlinear_ifelse()
+    model = MiniZinc.Model{Int}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), x, "x")
+    y, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), y, "y")
+    f1 = MOI.ScalarNonlinearFunction(:>, Any[x, 0])
+    f = MOI.ScalarNonlinearFunction(:ifelse, Any[f1, x, y])
+    MOI.add_constraint(model, f, MOI.EqualTo(1))
+    @test sprint(write, model) == """
+    var int: x;
+    var int: y;
+    constraint (if (x > 0) then x else y endif) = 1;
+    solve satisfy;
+    """
+    return
+end
+
 function test_model_unsupported_vectoraffine_constraint()
     model = MiniZinc.Model{Int}()
     x = MOI.add_variables(model, 2)
@@ -1340,6 +1358,7 @@ function test_supported_operators()
     @test :count in ops
     @test :alldifferent in ops
     @test :reified in ops
+    @test :ifelse in ops
     return
 end
 
