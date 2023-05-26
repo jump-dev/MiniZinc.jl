@@ -92,10 +92,11 @@ MOI.get(model::Optimizer, ::MOI.SolverName) = "MiniZinc"
 
 MOI.is_empty(model::Optimizer) = MOI.is_empty(model.inner)
 
-function MOI.empty!(model::Optimizer)
+function MOI.empty!(model::Optimizer{T}) where {T}
     MOI.empty!(model.inner)
     empty!(model.inner.ext)
     model.solver_status = ""
+    model.objective_value = zero(T)
     empty!(model.primal_solution)
     return
 end
