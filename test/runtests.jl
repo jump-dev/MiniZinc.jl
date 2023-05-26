@@ -967,12 +967,14 @@ function test_moi_one_solution_fzn()
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) == 10
+    @test MOI.get(solver, MOI.ObjectiveValue()) == 10
     MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
     solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
     index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) == 1
+    @test MOI.get(solver, MOI.ObjectiveValue()) == 1
     return
 end
 

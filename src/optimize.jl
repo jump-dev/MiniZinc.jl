@@ -33,12 +33,13 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
     solver::String
     inner::Model{T}
     solver_status::String
+    primal_objective::T
     primal_solution::Dict{MOI.VariableIndex,T}
     options::Dict{String,Any}
     function Optimizer{T}(solver::String) where {T}
         primal_solution = Dict{MOI.VariableIndex,T}()
         options = Dict{String,Any}("model_filename" => "")
-        return new(solver, Model{T}(), "", primal_solution, options)
+        return new(solver, Model{T}(), "", zero(T), primal_solution, options)
     end
 end
 
@@ -74,7 +75,7 @@ function _run_minizinc(dest::Optimizer)
     output = joinpath(dir, "model.ozn")
     _stdout = joinpath(dir, "_stdout.txt")
     _minizinc_exe() do exe
-        cmd = `$(exe) --solver $(dest.solver) -o $(output) $(filename)`
+        cmd = `$(exe) --solver $(dest.solver) --output-objective -o $(output) $(filename)`
         return run(pipeline(cmd, stdout = _stdout))
     end
     if isfile(output)
@@ -151,7 +152,11 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
             )
             for line in split(ret, "\n")
                 m_var = match(r"(.+) \= (.+)\;", line)
-                if m_var !== nothing
+                if m_var === nothing
+                    continue
+                elseif m_var[1] == "_objective"
+                    dest.primal_objective = _parse_result(T, m_var[2])
+                else
                     x = variable_map[m_var[1]]
                     dest.primal_solution[x] = _parse_result(T, m_var[2])
                 end
@@ -161,8 +166,8 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     return index_map, false
 end
 
-function MOI.get(model::Optimizer, ::MOI.VariablePrimal, x::MOI.VariableIndex)
-    return model.primal_solution[x]
+function MOI.is_valid(model::Optimizer, x::MOI.VariableIndex)
+    return MOI.is_valid(model.inner, x)
 end
 
 function _has_solution(model::Optimizer)
@@ -191,4 +196,19 @@ MOI.get(::Optimizer, ::MOI.DualStatus) = MOI.NO_SOLUTION
 
 function MOI.get(model::Optimizer, ::MOI.ResultCount)
     return _has_solution(model) ? 1 : 0
+end
+
+function MOI.get(model::Optimizer, attr::MOI.ObjectiveValue)
+    MOI.check_result_index_bounds(model, attr)
+    return model.primal_objective
+end
+
+function MOI.get(
+    model::Optimizer,
+    attr::MOI.VariablePrimal,
+    x::MOI.VariableIndex,
+)
+    MOI.check_result_index_bounds(model, attr)
+    MOI.throw_if_not_valid(model, x)
+    return model.primal_solution[x]
 end
