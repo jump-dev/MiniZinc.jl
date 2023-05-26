@@ -15,15 +15,6 @@ function run_flatzinc(solver_cmd::F, filename, args = String[]) where {F}
     end
 end
 
-function _artifact_path()
-    return joinpath(
-        LazyArtifacts.artifact"minizinc",
-        "MiniZinc.x86_64-apple-darwin",
-        "bin",
-        "minizinc",
-    )
-end
-
 """
     Optimizer{T}(solver_cmd) where {T}
 
@@ -51,10 +42,8 @@ function _minizinc_exe(f::F) where {F}
         else
             return f(joinpath(user_dir, "minizinc"))
         end
-    elseif Sys.islinux()
+    elseif Sys.islinux() || Sys.isapple()
         return MiniZinc_jll.minizinc(f)
-    elseif Sys.isapple()
-        return f(_artifact_path())
     end
     return error(
         "Unable to call libminizinc. Please manually install a copy and set " *
