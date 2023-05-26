@@ -6,11 +6,8 @@
 module MiniZinc
 
 import Chuffed_jll
-import LazyArtifacts
-import MathOptInterface
+import MathOptInterface as MOI
 import MiniZinc_jll
-
-const MOI = MathOptInterface
 
 const ReifiedLessThan{T} = MOI.Reified{MOI.LessThan{T}}
 const ReifiedGreaterThan{T} = MOI.Reified{MOI.GreaterThan{T}}

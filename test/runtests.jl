@@ -7,10 +7,8 @@ module TestMiniZinc
 
 using Test
 import Chuffed_jll
-import MathOptInterface
+import MathOptInterface as MOI
 import MiniZinc
-
-const MOI = MathOptInterface
 
 function runtests()
     for name in names(@__MODULE__; all = true)
