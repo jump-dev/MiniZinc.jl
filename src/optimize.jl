@@ -147,6 +147,7 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
             @assert length(m_stat.captures) == 1
             dest.solver_status = m_stat[1]
         else
+            dest.solver_status = "SATISFIABLE"
             variable_map = Dict(
                 MOI.get(dest.inner, MOI.VariableName(), x) => x for
                 x in MOI.get(src, MOI.ListOfVariableIndices())
@@ -172,8 +173,11 @@ function MOI.is_valid(model::Optimizer, x::MOI.VariableIndex)
 end
 
 function _has_solution(model::Optimizer)
-    return isempty(model.solver_status) && !isempty(model.primal_solution)
+    return model.solver_status == "SATISFIABLE" &&
+           !isempty(model.primal_solution)
 end
+
+MOI.get(model::Optimizer, ::MOI.RawStatusString) = model.solver_status
 
 function MOI.get(model::Optimizer, ::MOI.TerminationStatus)
     if model.solver_status == "UNSATISFIABLE"
