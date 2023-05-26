@@ -96,7 +96,7 @@ function MOI.empty!(model::Optimizer{T}) where {T}
     MOI.empty!(model.inner)
     empty!(model.inner.ext)
     model.solver_status = ""
-    model.objective_value = zero(T)
+    model.primal_objective = zero(T)
     empty!(model.primal_solution)
     return
 end
