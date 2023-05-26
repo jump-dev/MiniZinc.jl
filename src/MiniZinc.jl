@@ -77,6 +77,8 @@ _PREFIX_OPS = Dict(
     :count => "count",
     :alldifferent => "alldifferent",
     :sum => "sum",
+    :maximum => "max",
+    :minimum => "min",
     :bool2int => "bool2int",
 )
 
