@@ -1376,7 +1376,7 @@ function test_write_bool()
     return
 end
 
-function test_highs()
+function test_highs_feasibility()
     model = MOI.Utilities.Model{Float64}()
     x, x_int = MOI.add_constrained_variable(model, MOI.Integer())
     c1 = MOI.add_constraint(model, x, MOI.GreaterThan(1.0))
@@ -1390,6 +1390,29 @@ function test_highs()
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) in [1.0, 2.0, 3.0]
+    @test MOI.get(solver, MOI.RawStatusString()) == "SATISFIABLE"
+    return
+end
+
+function test_highs_optimization()
+    model = MOI.Utilities.Model{Float64}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.add_constraint(model, x, MOI.Interval(1.0, 10.0))
+    MOI.set(model, MOI.ObjectiveFunction{typeof(x)}(), x)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    solver = MiniZinc.Optimizer{Int}("highs")
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ResultCount()) >= 1
+    @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) == 10.0
+    @test MOI.get(solver, MOI.ObjectiveValue()) == 10.0
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+    solver = MiniZinc.Optimizer{Int}("highs")
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ResultCount()) >= 1
+    @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) == 1.0
+    @test MOI.get(solver, MOI.ObjectiveValue()) == 1.0
     @test MOI.get(solver, MOI.RawStatusString()) == "SATISFIABLE"
     return
 end

@@ -80,6 +80,8 @@ function MOI.supports_constraint(
     return true
 end
 
+_SPECIAL_OPS = Set([:ifelse])
+
 _PREFIX_OPS = Dict(
     :(!) => "not",
     :abs => "abs",
@@ -115,8 +117,10 @@ _INFIX_OPS = Dict(
     :(!=) => "!=",
 )
 
-_SUPPORTED_OPS =
-    reduce(vcat, collect(keys(d)) for d in [_PREFIX_OPS, _INFIX_OPS])
+_SUPPORTED_OPS = reduce(
+    vcat,
+    collect(d) for d in [_SPECIAL_OPS, keys(_PREFIX_OPS), keys(_INFIX_OPS)]
+)
 
 _PREDICATE_NAMES = Set(["alldifferent"])
 
