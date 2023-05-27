@@ -1189,6 +1189,24 @@ function test_write_bool()
     return
 end
 
+function test_highs()
+    model = MOI.Utilities.Model{Float64}()
+    x, x_int = MOI.add_constrained_variable(model, MOI.Integer())
+    c1 = MOI.add_constraint(model, x, MOI.GreaterThan(1.0))
+    c2 = MOI.add_constraint(model, x, MOI.LessThan(3.0))
+    @test MOI.is_valid(model, x)
+    @test MOI.is_valid(model, x_int)
+    @test MOI.is_valid(model, c1)
+    @test MOI.is_valid(model, c2)
+    solver = MiniZinc.Optimizer{Float64}("highs")
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ResultCount()) >= 1
+    @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) in [1.0, 2.0, 3.0]
+    @test MOI.get(solver, MOI.RawStatusString()) == "SATISFIABLE"
+    return
+end
+
 end
 
 TestMiniZinc.runtests()
