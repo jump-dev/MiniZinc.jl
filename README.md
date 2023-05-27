@@ -100,11 +100,12 @@ julia> main()
 ## Use with JuMP
 
 You can also call MiniZinc from JuMP, using any solver that `libminizinc`
-supports. For example, if you have Gurobi installed:
+supports. By default, MiniZinc.jl is comiled with `"highs"`:
+
 ```julia
 using JuMP
 import MiniZinc
-model = Model(() -> MiniZinc.Optimizer{Float64}("gurobi"))
+model = Model(() -> MiniZinc.Optimizer{Float64}("highs"))
 @variable(model, 1 <= x[1:3] <= 3, Int)
 @constraint(model, x in MOI.AllDifferent(3))
 @objective(model, Max, sum(i * x[i] for i in 1:3))
@@ -114,12 +115,12 @@ optimize!(model)
 
 ## MathOptInterface API
 
-The MiniZinc optimizer supports the following constraints and attributes.
+The MiniZinc `Optimizer{T}` supports the following constraints and attributes.
 
 List of supported objective functions:
 
- * [`MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}`](@ref)
- * [`MOI.ObjectiveFunction{MOI.ScalarQuadraticFunction{Float64}}`](@ref)
+ * [`MOI.ObjectiveFunction{MOI.ScalarAffineFunction{T}}`](@ref)
+ * [`MOI.ObjectiveFunction{MOI.ScalarQuadraticFunction{T}}`](@ref)
  * [`MOI.ObjectiveFunction{MOI.VariableIndex}`](@ref)
 
 List of supported variable types:
@@ -128,23 +129,23 @@ List of supported variable types:
 
 List of supported constraint types:
 
- * [`MOI.ScalarAffineFunction{Float64}`](@ref) in [`MOI.EqualTo{Float64}`](@ref)
- * [`MOI.ScalarAffineFunction{Float64}`](@ref) in [`MOI.GreaterThan{Float64}`](@ref)
- * [`MOI.ScalarAffineFunction{Float64}`](@ref) in [`MOI.Integer`](@ref)
- * [`MOI.ScalarAffineFunction{Float64}`](@ref) in [`MOI.Interval{Float64}`](@ref)
- * [`MOI.ScalarAffineFunction{Float64}`](@ref) in [`MOI.LessThan{Float64}`](@ref)
- * [`MOI.ScalarAffineFunction{Float64}`](@ref) in [`MOI.ZeroOne`](@ref)
- * [`MOI.VariableIndex`](@ref) in [`MOI.EqualTo{Float64}`](@ref)
- * [`MOI.VariableIndex`](@ref) in [`MOI.GreaterThan{Float64}`](@ref)
+ * [`MOI.ScalarAffineFunction{T}`](@ref) in [`MOI.EqualTo{T}`](@ref)
+ * [`MOI.ScalarAffineFunction{T}`](@ref) in [`MOI.GreaterThan{T}`](@ref)
+ * [`MOI.ScalarAffineFunction{T}`](@ref) in [`MOI.Integer`](@ref)
+ * [`MOI.ScalarAffineFunction{T}`](@ref) in [`MOI.Interval{T}`](@ref)
+ * [`MOI.ScalarAffineFunction{T}`](@ref) in [`MOI.LessThan{T}`](@ref)
+ * [`MOI.ScalarAffineFunction{T}`](@ref) in [`MOI.ZeroOne`](@ref)
+ * [`MOI.VariableIndex`](@ref) in [`MOI.EqualTo{T}`](@ref)
+ * [`MOI.VariableIndex`](@ref) in [`MOI.GreaterThan{T}`](@ref)
  * [`MOI.VariableIndex`](@ref) in [`MOI.Integer`](@ref)
- * [`MOI.VariableIndex`](@ref) in [`MOI.Interval{Float64}`](@ref)
- * [`MOI.VariableIndex`](@ref) in [`MOI.LessThan{Float64}`](@ref)
- * [`MOI.VariableIndex`](@ref) in [`MOI.Parameter{Float64}`](@ref)
- * [`MOI.VariableIndex`](@ref) in [`MOI.Semicontinuous{Float64}`](@ref)
- * [`MOI.VariableIndex`](@ref) in [`MOI.Semiinteger{Float64}`](@ref)
+ * [`MOI.VariableIndex`](@ref) in [`MOI.Interval{T}`](@ref)
+ * [`MOI.VariableIndex`](@ref) in [`MOI.LessThan{T}`](@ref)
+ * [`MOI.VariableIndex`](@ref) in [`MOI.Parameter{T}`](@ref)
+ * [`MOI.VariableIndex`](@ref) in [`MOI.Semicontinuous{T}`](@ref)
+ * [`MOI.VariableIndex`](@ref) in [`MOI.Semiinteger{T}`](@ref)
  * [`MOI.VariableIndex`](@ref) in [`MOI.ZeroOne`](@ref)
  * [`MOI.VectorOfVariables`](@ref) in [`MOI.AllDifferent`](@ref)
- * [`MOI.VectorOfVariables`](@ref) in [`MOI.BinPacking{Float64}`](@ref)
+ * [`MOI.VectorOfVariables`](@ref) in [`MOI.BinPacking{T}`](@ref)
  * [`MOI.VectorOfVariables`](@ref) in [`MOI.Circuit`](@ref)
  * [`MOI.VectorOfVariables`](@ref) in [`MOI.CountAtLeast`](@ref)
  * [`MOI.VectorOfVariables`](@ref) in [`MOI.CountBelongs`](@ref)
@@ -152,7 +153,7 @@ List of supported constraint types:
  * [`MOI.VectorOfVariables`](@ref) in [`MOI.CountGreaterThan`](@ref)
  * [`MOI.VectorOfVariables`](@ref) in [`MOI.Cumulative`](@ref)
  * [`MOI.VectorOfVariables`](@ref) in [`MOI.Path`](@ref)
- * [`MOI.VectorOfVariables`](@ref) in [`MOI.Table{Float64}`](@ref)
+ * [`MOI.VectorOfVariables`](@ref) in [`MOI.Table{T}`](@ref)
 
 List of supported model attributes:
 
