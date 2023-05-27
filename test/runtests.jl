@@ -12,10 +12,8 @@ module TestMiniZinc
 
 using Test
 import Chuffed_jll
-import MathOptInterface
+import MathOptInterface as MOI
 import MiniZinc
-
-const MOI = MathOptInterface
 
 function runtests()
     for name in names(@__MODULE__; all = true)
@@ -1045,6 +1043,7 @@ function test_moi_basic_fzn()
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) in [1, 2, 3]
+    @test MOI.get(solver, MOI.RawStatusString()) == "SATISFIABLE"
     return
 end
 
@@ -1061,6 +1060,7 @@ function test_moi_var_domain_infeasible_fzn()
     MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.INFEASIBLE
     @test MOI.get(solver, MOI.ResultCount()) == 0
+    @test MOI.get(solver, MOI.RawStatusString()) == "UNSATISFIABLE"
     return
 end
 
@@ -1088,12 +1088,14 @@ function test_moi_one_solution_fzn()
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) == 10
+    @test MOI.get(solver, MOI.ObjectiveValue()) == 10
     MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
     solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
     index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) == 1
+    @test MOI.get(solver, MOI.ObjectiveValue()) == 1
     return
 end
 
@@ -1365,6 +1367,30 @@ end
 function test_model_solver_name()
     solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
     @test MOI.get(solver, MOI.SolverName()) == "MiniZinc"
+    return
+end
+
+function test_write_bool()
+    model = MiniZinc.Model{Int}()
+    @test !MOI.supports(model, MOI.ObjectiveFunction{MOI.VectorOfVariables}())
+    return
+end
+
+function test_highs()
+    model = MOI.Utilities.Model{Float64}()
+    x, x_int = MOI.add_constrained_variable(model, MOI.Integer())
+    c1 = MOI.add_constraint(model, x, MOI.GreaterThan(1.0))
+    c2 = MOI.add_constraint(model, x, MOI.LessThan(3.0))
+    @test MOI.is_valid(model, x)
+    @test MOI.is_valid(model, x_int)
+    @test MOI.is_valid(model, c1)
+    @test MOI.is_valid(model, c2)
+    solver = MiniZinc.Optimizer{Float64}("highs")
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ResultCount()) >= 1
+    @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) in [1.0, 2.0, 3.0]
+    @test MOI.get(solver, MOI.RawStatusString()) == "SATISFIABLE"
     return
 end
 

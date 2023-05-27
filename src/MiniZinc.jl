@@ -6,11 +6,8 @@
 module MiniZinc
 
 import Chuffed_jll
-import LazyArtifacts
-import MathOptInterface
+import MathOptInterface as MOI
 import MiniZinc_jll
-
-const MOI = MathOptInterface
 
 const ReifiedLessThan{T} = MOI.Reified{MOI.LessThan{T}}
 const ReifiedGreaterThan{T} = MOI.Reified{MOI.GreaterThan{T}}
@@ -58,6 +55,20 @@ function MOI.supports_constraint(
     ::Type{MOI.VectorAffineFunction{T}},
     ::Type{<:MOI.AbstractVectorSet},
 ) where {T}
+    return false
+end
+
+function MOI.supports(
+    ::Model{T},
+    ::MOI.ObjectiveFunction{F},
+) where {
+    T,
+    F<:Union{
+        MOI.VectorOfVariables,
+        MOI.VectorAffineFunction{T},
+        MOI.VectorQuadraticFunction{T},
+    },
+}
     return false
 end
 
