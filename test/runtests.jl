@@ -917,7 +917,7 @@ function test_moi_basic_fzn()
     @test MOI.is_valid(model, x_int)
     @test MOI.is_valid(model, c1)
     @test MOI.is_valid(model, c2)
-    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    solver = MiniZinc.Optimizer{Int}("chuffed")
     index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1
@@ -935,7 +935,7 @@ function test_moi_var_domain_infeasible_fzn()
     @test MOI.is_valid(model, x_int)
     @test MOI.is_valid(model, c1)
     @test MOI.is_valid(model, c2)
-    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    solver = MiniZinc.Optimizer{Int}("chuffed")
     MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.INFEASIBLE
     @test MOI.get(solver, MOI.ResultCount()) == 0
@@ -949,7 +949,7 @@ function test_moi_infeasible_fzn()
     MOI.add_constraint.(model, x, MOI.Integer())
     MOI.add_constraint.(model, x, MOI.GreaterThan(1))
     MOI.add_constraint(model, sum(x, init = 0), MOI.LessThan(2))
-    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    solver = MiniZinc.Optimizer{Int}("chuffed")
     MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.INFEASIBLE
     @test MOI.get(solver, MOI.ResultCount()) == 0
@@ -962,14 +962,14 @@ function test_moi_one_solution_fzn()
     MOI.add_constraint(model, x, MOI.Interval(1, 10))
     MOI.set(model, MOI.ObjectiveFunction{typeof(x)}(), x)
     MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
-    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    solver = MiniZinc.Optimizer{Int}("chuffed")
     index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) == 10
     @test MOI.get(solver, MOI.ObjectiveValue()) == 10
     MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
-    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    solver = MiniZinc.Optimizer{Int}("chuffed")
     index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1
@@ -987,7 +987,7 @@ function test_moi_int_lin()
         MOI.add_constraint(model, 1 * x[i], MOI.LessThan(1))
     end
     MOI.add_constraint(model, sum(1 * x[i] for i in 1:3), MOI.EqualTo(2))
-    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    solver = MiniZinc.Optimizer{Int}("chuffed")
     index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1
@@ -1016,7 +1016,7 @@ function test_moi_send_more_money()
         (10_000 * M + 1_000 * O + 100 * N + 10 * E + Y)
     MOI.add_constraint.(model, f, MOI.EqualTo(0))
     MOI.add_constraint(model, MOI.VectorOfVariables(x), MOI.AllDifferent(8))
-    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    solver = MiniZinc.Optimizer{Int}("chuffed")
     index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1
@@ -1031,7 +1031,7 @@ end
 function test_moi_tests()
     model = MOI.Utilities.CachingOptimizer(
         MOI.Utilities.Model{Int}(),
-        MiniZinc.Optimizer{Int}(MiniZinc.Chuffed()),
+        MiniZinc.Optimizer{Int}("chuffed"),
     )
     config = MOI.Test.Config(Int)
     MOI.Test.runtests(model, config, include = String["test_cpsat_"])
@@ -1047,7 +1047,7 @@ function test_model_filename()
     @test MOI.is_valid(model, x_int)
     @test MOI.is_valid(model, c1)
     @test MOI.is_valid(model, c2)
-    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    solver = MiniZinc.Optimizer{Int}("chuffed")
     attr = MOI.RawOptimizerAttribute("model_filename")
     @test MOI.supports(solver, attr)
     @test MOI.get(solver, attr) == ""
@@ -1073,7 +1073,7 @@ function test_model_nlp_boolean()
     backend = MOI.Nonlinear.ExprGraphOnly()
     evaluator = MOI.Nonlinear.Evaluator(nlp, backend, x)
     MOI.set(model, MOI.NLPBlock(), MOI.NLPBlockData(evaluator))
-    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    solver = MiniZinc.Optimizer{Int}("chuffed")
     MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
     index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
@@ -1107,7 +1107,7 @@ function test_model_nlp_boolean_nested()
     backend = MOI.Nonlinear.ExprGraphOnly()
     evaluator = MOI.Nonlinear.Evaluator(nlp, backend, x)
     MOI.set(model, MOI.NLPBlock(), MOI.NLPBlockData(evaluator))
-    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    solver = MiniZinc.Optimizer{Int}("chuffed")
     MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
     index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
@@ -1134,7 +1134,7 @@ function test_model_nlp_boolean_jump()
     backend = MOI.Nonlinear.ExprGraphOnly()
     evaluator = MOI.Nonlinear.Evaluator(nlp, backend, x)
     MOI.set(model, MOI.NLPBlock(), MOI.NLPBlockData(evaluator))
-    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    solver = MiniZinc.Optimizer{Int}("chuffed")
     MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
     index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
@@ -1163,7 +1163,7 @@ function test_model_nlp_boolean_registered()
     backend = MOI.Nonlinear.ExprGraphOnly()
     evaluator = MOI.Nonlinear.Evaluator(nlp, backend, x)
     MOI.set(model, MOI.NLPBlock(), MOI.NLPBlockData(evaluator))
-    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    solver = MiniZinc.Optimizer{Int}("chuffed")
     MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
     index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
@@ -1178,7 +1178,7 @@ function test_model_nlp_boolean_registered()
 end
 
 function test_model_solver_name()
-    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    solver = MiniZinc.Optimizer{Int}("chuffed")
     @test MOI.get(solver, MOI.SolverName()) == "MiniZinc"
     return
 end
