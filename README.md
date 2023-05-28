@@ -63,7 +63,7 @@ MathOptInterface
 julia> function main()
            model = MOI.Utilities.CachingOptimizer(
                MiniZinc.Model{Int}(),
-               MiniZinc.Optimizer{Int}(MiniZinc.Chuffed()),
+               MiniZinc.Optimizer{Int}("chuffed"),
            )
            # xᵢ ∈ {1, 2, 3} ∀i=1,2,3
            x = MOI.add_variables(model, 3)

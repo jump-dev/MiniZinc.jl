@@ -28,6 +28,9 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
     primal_solution::Dict{MOI.VariableIndex,T}
     options::Dict{String,Any}
     function Optimizer{T}(solver::String) where {T}
+        if solver == "chuffed"
+            solver = Chuffed()
+        end
         primal_solution = Dict{MOI.VariableIndex,T}()
         options = Dict{String,Any}("model_filename" => "")
         return new(solver, Model{T}(), "", zero(T), primal_solution, options)
