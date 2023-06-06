@@ -100,7 +100,7 @@ julia> main()
 ## Use with JuMP
 
 You can also call MiniZinc from JuMP, using any solver that `libminizinc`
-supports. By default, MiniZinc.jl is comiled with `"highs"`:
+supports. By default, MiniZinc.jl is compiled with `"highs"`:
 
 ```julia
 using JuMP
