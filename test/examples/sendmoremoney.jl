@@ -25,7 +25,7 @@ function test_send_more_money()
     MOI.add_constraint.(model, f, MOI.EqualTo(0))
     MOI.add_constraint(model, MOI.VectorOfVariables(x), MOI.AllDifferent(8))
     # solve
-    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    solver = MiniZinc.Optimizer{Int}("chuffed")
     index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1

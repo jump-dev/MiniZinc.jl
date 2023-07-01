@@ -44,7 +44,7 @@ function test_sudoku()
         MOI.add_constraint(model, square, MOI.AllDifferent(n))
     end
     # solve
-    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    solver = MiniZinc.Optimizer{Int}("chuffed")
     MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
     index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL

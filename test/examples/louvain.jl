@@ -15,7 +15,7 @@ function test_louvain()
     ]
     n_communities = 2
     # use a caching optimizer for the model
-    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    solver = MiniZinc.Optimizer{Int}("chuffed")
     MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
     model = MOI.Utilities.CachingOptimizer(MOI.Utilities.Model{Int}(), solver)
     # setup model

@@ -20,7 +20,7 @@ function test_nqueens()
         MOI.add_constraint(model, f, MOI.EqualTo(1))
     end
     # solve
-    solver = MiniZinc.Optimizer{Int}(MiniZinc.Chuffed())
+    solver = MiniZinc.Optimizer{Int}("chuffed")
     MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
     index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL

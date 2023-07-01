@@ -63,7 +63,7 @@ MathOptInterface
 julia> function main()
            model = MOI.Utilities.CachingOptimizer(
                MiniZinc.Model{Int}(),
-               MiniZinc.Optimizer{Int}(MiniZinc.Chuffed()),
+               MiniZinc.Optimizer{Int}("chuffed"),
            )
            # xᵢ ∈ {1, 2, 3} ∀i=1,2,3
            x = MOI.add_variables(model, 3)
@@ -100,7 +100,7 @@ julia> main()
 ## Use with JuMP
 
 You can also call MiniZinc from JuMP, using any solver that `libminizinc`
-supports. By default, MiniZinc.jl is comiled with `"highs"`:
+supports. By default, MiniZinc.jl is compiled with `"highs"`:
 
 ```julia
 using JuMP
