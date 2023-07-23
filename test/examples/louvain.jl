@@ -25,7 +25,7 @@ function test_louvain()
     terms = Any[]
     for (u, v, w) in edges
         o = 2 * m * w - k[u] * k[v]
-        f1 = MOI.ScalarNonlinearFunction(:(=), Any[x[u], x[v]])
+        f1 = MOI.ScalarNonlinearFunction(:(==), Any[x[u], x[v]])
         f2 = MOI.ScalarNonlinearFunction(:ifelse, Any[f1, o, 0])
         push!(terms, f2)
     end

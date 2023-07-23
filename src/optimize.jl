@@ -157,7 +157,7 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
             end
         end
     end
-    return (index_map, false)
+    return index_map, false
 end
 
 function MOI.is_valid(model::Optimizer, x::MOI.VariableIndex)

@@ -80,9 +80,9 @@ function MOI.supports_constraint(
     return true
 end
 
-_SPECIAL_OPS = Set([:ifelse])
+const _SPECIAL_OPS = Set([:ifelse])
 
-_PREFIX_OPS = Dict(
+const _PREFIX_OPS = Dict(
     :(!) => "not",
     :abs => "abs",
     :exists => "exists",
@@ -95,7 +95,7 @@ _PREFIX_OPS = Dict(
     :bool2int => "bool2int",
 )
 
-_INFIX_OPS = Dict(
+const _INFIX_OPS = Dict(
     :|| => "\\/",
     :&& => "/\\",
     :- => "-",
@@ -117,12 +117,12 @@ _INFIX_OPS = Dict(
     :(!=) => "!=",
 )
 
-_SUPPORTED_OPS = reduce(
+const _SUPPORTED_OPS = reduce(
     vcat,
     collect(d) for d in [_SPECIAL_OPS, keys(_PREFIX_OPS), keys(_INFIX_OPS)]
 )
 
-_PREDICATE_NAMES = Set(["alldifferent"])
+const _PREDICATE_NAMES = Set(["alldifferent"])
 
 MOI.get(::Model, ::MOI.ListOfSupportedNonlinearOperators) = _SUPPORTED_OPS
 
