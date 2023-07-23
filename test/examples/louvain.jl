@@ -14,10 +14,11 @@ function test_louvain()
         i in 1:n_nodes
     ]
     n_communities = 2
-    # use a caching optimizer for the model
-    solver = MiniZinc.Optimizer{Int}("chuffed")
-    MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
-    model = MOI.Utilities.CachingOptimizer(MOI.Utilities.Model{Int}(), solver)
+    model = MOI.instantiate(
+        () -> MiniZinc.Optimizer{Int}("chuffed");
+        with_cache_type = Int,
+    )
+    MOI.set(model, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
     # setup model
     x = MOI.add_variables(model, n_nodes)
     MOI.add_constraint(model, x[1], MOI.EqualTo(1))
@@ -38,7 +39,8 @@ function test_louvain()
     @test MOI.get(model, MOI.ResultCount()) >= 1
     x_sol = MOI.get(model, MOI.VariablePrimal(), x)
     @test x_sol == [1, 2, 1, 2, 1]
-    # MOI.get(model, MOI.ObjectiveValue()) # TODO test in future when MOI allows evaluating SNF value
+    @test MOI.get(model, MOI.ObjectiveValue()) == 1410
+    @test MOI.Utilities.eval_variables(vi -> x_sol[vi.value], model, f) == 1410
     rm("test.mzn")
     return
 end
