@@ -19,23 +19,21 @@ function test_sudoku()
     ]
     n = 9
     m = 3
-    model = MOI.Utilities.Model{Int}()
+    model = MOI.instantiate(
+        () -> MiniZinc.Optimizer{Int}("chuffed");
+        with_cache_type = Int,
+    )
+    MOI.set(model, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
     x = MOI.add_variables(model, n^2)
     X = reshape(x, n, n)
     for i in 1:n, j in 1:n
         sij = start[i, j]
-        xij = X[i, j]
-        if iszero(sij)
-            MOI.add_constraint.(model, xij, MOI.Interval(1, n))
-        else
-            MOI.add_constraint(model, xij, MOI.EqualTo(sij))
-        end
+        setij = iszero(sij) ? MOI.Interval(1, n) : MOI.EqualTo(sij)
+        MOI.add_constraint(model, X[i, j], setij)
     end
-    for i in 1:n
-        row = MOI.VectorOfVariables(X[i, :])
-        col = MOI.VectorOfVariables(X[:, i])
-        MOI.add_constraint(model, row, MOI.AllDifferent(n))
-        MOI.add_constraint(model, col, MOI.AllDifferent(n))
+    for i in 1:n, xi in (X[i, :], X[:, i])
+        vv = MOI.VectorOfVariables(xi)
+        MOI.add_constraint(model, vv, MOI.AllDifferent(n))
     end
     for k in 1:m, l in 1:m
         ii = ((k-1)*m+1):(k*m)
@@ -44,13 +42,10 @@ function test_sudoku()
         MOI.add_constraint(model, square, MOI.AllDifferent(n))
     end
     # solve
-    solver = MiniZinc.Optimizer{Int}("chuffed")
-    MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
-    index_map, _ = MOI.optimize!(solver, model)
-    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
-    @test MOI.get(solver, MOI.ResultCount()) >= 1
-    x_sol = MOI.get(solver, MOI.VariablePrimal(), [index_map[v] for v in x])
-    X_sol = reshape(x_sol, n, n)
+    MOI.optimize!(model)
+    @test MOI.get(model, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(model, MOI.ResultCount()) >= 1
+    X_sol = reshape(MOI.get(model, MOI.VariablePrimal(), x), n, n)
     sol = [
         5 3 4 6 7 8 9 1 2
         6 7 2 1 9 5 3 4 8
@@ -64,14 +59,12 @@ function test_sudoku()
     ]
     @test X_sol == sol
     # cut off that solution to make model infeasible
-    MOI.empty!(solver)
-    @test MOI.is_empty(solver)
     f = MOI.ScalarNonlinearFunction(:(!=), Any[X[1, 3], sol[1, 3]])
     MOI.add_constraint(model, f, MOI.EqualTo(1))
-    index_map, _ = MOI.optimize!(solver, model)
-    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.INFEASIBLE
-    @test MOI.get(solver, MOI.PrimalStatus()) === MOI.NO_SOLUTION
-    @test MOI.get(solver, MOI.ResultCount()) == 0
+    MOI.optimize!(model)
+    @test MOI.get(model, MOI.TerminationStatus()) === MOI.INFEASIBLE
+    @test MOI.get(model, MOI.PrimalStatus()) === MOI.NO_SOLUTION
+    @test MOI.get(model, MOI.ResultCount()) == 0
     rm("test.mzn")
     return
 end
