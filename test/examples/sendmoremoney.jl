@@ -4,9 +4,9 @@
 # in the LICENSE.md file or at https://opensource.org/licenses/MIT.
 
 # send more money example
+# based on MiniZinc example send-more-money.mzn
 
 function test_send_more_money()
-    # based on MiniZinc example send-more-money.mzn
     model = MOI.instantiate(
         () -> MiniZinc.Optimizer{Int}("chuffed");
         with_cache_type = Int,

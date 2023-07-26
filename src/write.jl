@@ -12,7 +12,7 @@ function _variable_info(model::Model{T}, x) where {T}
     is_bool = (T == Bool) || MOI.is_valid(model, ci_zero)
     # Integer
     ci_int = MOI.ConstraintIndex{F,MOI.Integer}(x.value)
-    is_int = MOI.is_valid(model, ci_int)
+    is_int = MOI.is_valid(model, ci_int) || T <: Integer
     # GreaterThan
     ci_lb = MOI.ConstraintIndex{F,MOI.GreaterThan{T}}(x.value)
     if MOI.is_valid(model, ci_lb)
