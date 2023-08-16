@@ -21,6 +21,22 @@ function runtests()
     return
 end
 
+for file in readdir("examples")
+    include(joinpath(@__DIR__, "examples", file))
+end
+
+function test_write_bool_model()
+    model = MiniZinc.Model{Bool}()
+    x = MOI.add_variable(model)
+    MOI.add_constraint(model, x, MOI.GreaterThan(true))
+    @test sprint(write, model) == """
+    var bool: x1;
+    constraint bool_eq(x1, true);
+    solve satisfy;
+    """
+    return
+end
+
 function test_write_bool()
     model = MiniZinc.Model{Int}()
     x, _ = MOI.add_constrained_variable(model, MOI.ZeroOne())
@@ -354,22 +370,60 @@ function test_write_maximize_linear()
     return
 end
 
+function test_write_quadratic_objective()
+    model = MiniZinc.Model{Int}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), x, "x")
+    y, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), y, "y")
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+    f = 1 * x * x + 2 * x * y + y + 4
+    MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)
+    @test sprint(write, model) == """
+    var int: x;
+    var int: y;
+    solve minimize 1*x*x + 2*x*y + 1*y + 4;
+    """
+    return
+end
+
+function test_write_nonlinear_objective()
+    model = MiniZinc.Model{Int}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), x, "x")
+    y, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), y, "y")
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+    f1 = MOI.ScalarNonlinearFunction(:abs, Any[x])
+    f2 = MOI.ScalarNonlinearFunction(:*, Any[f1, y])
+    MOI.set(model, MOI.ObjectiveFunction{typeof(f2)}(), f2)
+    @test sprint(write, model) == """
+    var int: x;
+    var int: y;
+    solve minimize (abs(x) * y);
+    """
+    return
+end
+
 function test_write_alldifferent()
     model = MiniZinc.Model{Int}()
     x, _ = MOI.add_constrained_variable(model, MOI.Integer())
     MOI.set(model, MOI.VariableName(), x, "x")
     y, _ = MOI.add_constrained_variable(model, MOI.Integer())
     MOI.set(model, MOI.VariableName(), y, "y")
-    z = [x, y]
-    MOI.add_constraint.(model, z, MOI.GreaterThan(1))
-    MOI.add_constraint.(model, z, MOI.LessThan(3))
-    MOI.add_constraint(model, MOI.VectorOfVariables(z), MOI.AllDifferent(2))
+    MOI.add_constraint.(model, [x, y], MOI.GreaterThan(1))
+    MOI.add_constraint.(model, [x, y], MOI.LessThan(3))
+    MOI.add_constraint(
+        model,
+        MOI.VectorOfVariables([x, y]),
+        MOI.AllDifferent(2),
+    )
     @test sprint(write, model) == """
-    include "alldifferent.mzn";
     var 1 .. 3: x;
     var 1 .. 3: y;
     constraint alldifferent([x, y]);
     solve satisfy;
+    include "alldifferent.mzn";
     """
     return
 end
@@ -380,23 +434,65 @@ function test_write_alldifferent_reified()
     MOI.set(model, MOI.VariableName(), x, "x")
     y, _ = MOI.add_constrained_variable(model, MOI.Integer())
     MOI.set(model, MOI.VariableName(), y, "y")
-    bool, _ = MOI.add_constrained_variable(model, MOI.ZeroOne())
-    MOI.set(model, MOI.VariableName(), bool, "z")
-    z = [x, y]
-    MOI.add_constraint.(model, z, MOI.GreaterThan(1))
-    MOI.add_constraint.(model, z, MOI.LessThan(3))
-    MOI.add_constraint(
-        model,
-        MOI.VectorOfVariables([bool; z]),
-        MOI.Reified(MOI.AllDifferent(2)),
-    )
+    z, _ = MOI.add_constrained_variable(model, MOI.ZeroOne())
+    MOI.set(model, MOI.VariableName(), z, "z")
+    MOI.add_constraint.(model, [x, y], MOI.GreaterThan(1))
+    MOI.add_constraint.(model, [x, y], MOI.LessThan(3))
+    vv = MOI.VectorOfVariables([z; x; y])
+    MOI.add_constraint(model, vv, MOI.Reified(MOI.AllDifferent(2)))
     @test sprint(write, model) == """
-    include "alldifferent.mzn";
     var 1 .. 3: x;
     var 1 .. 3: y;
     var bool: z;
     constraint z <-> alldifferent([x, y]);
     solve satisfy;
+    include "alldifferent.mzn";
+    """
+    return
+end
+
+function test_write_nonlinear_alldifferent()
+    model = MiniZinc.Model{Int}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), x, "x")
+    y, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), y, "y")
+    xy = [x, y]
+    MOI.add_constraint.(model, xy, MOI.GreaterThan(1))
+    MOI.add_constraint.(model, xy, MOI.LessThan(3))
+    f = MOI.ScalarNonlinearFunction(:alldifferent, Any[xy])
+    MOI.add_constraint(model, f, MOI.EqualTo(1))
+    @test sprint(write, model) == """
+    var 1 .. 3: x;
+    var 1 .. 3: y;
+    constraint alldifferent([x, y]) = 1;
+    solve satisfy;
+    include "alldifferent.mzn";
+    """
+    return
+end
+
+function test_write_nonlinear_alldifferent_reified()
+    model = MiniZinc.Model{Int}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), x, "x")
+    y, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), y, "y")
+    z, _ = MOI.add_constrained_variable(model, MOI.ZeroOne())
+    MOI.set(model, MOI.VariableName(), z, "z")
+    xy = [x, y]
+    MOI.add_constraint.(model, xy, MOI.GreaterThan(1))
+    MOI.add_constraint.(model, xy, MOI.LessThan(3))
+    f1 = MOI.ScalarNonlinearFunction(:alldifferent, Any[xy])
+    f2 = MOI.ScalarNonlinearFunction(:reified, Any[z, f1])
+    MOI.add_constraint(model, f2, MOI.EqualTo(1))
+    @test sprint(write, model) == """
+    var 1 .. 3: x;
+    var 1 .. 3: y;
+    var bool: z;
+    constraint (z <-> alldifferent([x, y])) = 1;
+    solve satisfy;
+    include "alldifferent.mzn";
     """
     return
 end
@@ -411,13 +507,13 @@ function test_write_countdistinct()
         MOI.set(model, MOI.VariableName(), x[i], "x$i")
     end
     @test sprint(write, model) == """
-    include "nvalue.mzn";
     var 1 .. 4: x1;
     var 1 .. 4: x2;
     var 1 .. 4: x3;
     var 1 .. 4: x4;
     constraint nvalue(x1, [x2, x3, x4]);
     solve satisfy;
+    include "nvalue.mzn";
     """
     return
 end
@@ -438,7 +534,6 @@ function test_write_countdistinct_reified()
         MOI.set(model, MOI.VariableName(), x[i], "x$i")
     end
     @test sprint(write, model) == """
-    include "nvalue.mzn";
     var 1 .. 4: x1;
     var 1 .. 4: x2;
     var 1 .. 4: x3;
@@ -446,6 +541,7 @@ function test_write_countdistinct_reified()
     var bool: b;
     constraint b <-> nvalue(x1, [x2, x3, x4]);
     solve satisfy;
+    include "nvalue.mzn";
     """
     return
 end
@@ -463,13 +559,13 @@ function test_write_countbelongs()
         MOI.CountBelongs(4, set),
     )
     @test sprint(write, model) == """
-    include "among.mzn";
     var int: x1;
     var int: x2;
     var int: x3;
     var int: x4;
     constraint among(x1, [x2, x3, x4], {3, 4});
     solve satisfy;
+    include "among.mzn";
     """
     return
 end
@@ -489,7 +585,6 @@ function test_write_countbelongs_reified()
         MOI.Reified(MOI.CountBelongs(4, set)),
     )
     @test sprint(write, model) == """
-    include "among.mzn";
     var int: x1;
     var int: x2;
     var int: x3;
@@ -497,6 +592,7 @@ function test_write_countbelongs_reified()
     var bool: b;
     constraint b <-> among(x1, [x2, x3, x4], {3, 4});
     solve satisfy;
+    include "among.mzn";
     """
     return
 end
@@ -518,12 +614,12 @@ function test_write_countatleast()
     MOI.set(model, MOI.VariableName(), y, "y")
     MOI.set(model, MOI.VariableName(), z, "z")
     @test sprint(write, model) == """
-    include "at_least.mzn";
     var int: x;
     var int: y;
     var int: z;
     constraint at_least(1, [{x, y}, {y, z}], {3});
     solve satisfy;
+    include "at_least.mzn";
     """
     return
 end
@@ -547,13 +643,13 @@ function test_write_countatleast_reified()
     MOI.set(model, MOI.VariableName(), z, "z")
     MOI.set(model, MOI.VariableName(), b, "b")
     @test sprint(write, model) == """
-    include "at_least.mzn";
     var int: x;
     var int: y;
     var int: z;
     var bool: b;
     constraint b <-> at_least(1, [{x, y}, {y, z}], {3});
     solve satisfy;
+    include "at_least.mzn";
     """
     return
 end
@@ -574,7 +670,6 @@ function test_write_countgreaterthan()
         MOI.set(model, MOI.VariableName(), x[i], "x$i")
     end
     @test sprint(write, model) == """
-    include "count_gt.mzn";
     var int: c;
     var int: y;
     var int: x1;
@@ -582,6 +677,7 @@ function test_write_countgreaterthan()
     var int: x3;
     constraint count_gt([x1, x2, x3], y, c);
     solve satisfy;
+    include "count_gt.mzn";
     """
     return
 end
@@ -604,7 +700,6 @@ function test_write_countgreaterthan_reified()
         MOI.set(model, MOI.VariableName(), x[i], "x$i")
     end
     @test sprint(write, model) == """
-    include "count_gt.mzn";
     var int: c;
     var int: y;
     var int: x1;
@@ -613,6 +708,7 @@ function test_write_countgreaterthan_reified()
     var bool: b;
     constraint b <-> count_gt([x1, x2, x3], y, c);
     solve satisfy;
+    include "count_gt.mzn";
     """
     return
 end
@@ -628,11 +724,11 @@ function test_write_binpacking()
     MOI.set(model, MOI.VariableName(), x[1], "x1")
     MOI.set(model, MOI.VariableName(), x[2], "x2")
     @test sprint(write, model) == """
-    include "bin_packing.mzn";
     var int: x1;
     var int: x2;
     constraint bin_packing(2, [x1, x2], [3, 4]);
     solve satisfy;
+    include "bin_packing.mzn";
     """
     return
 end
@@ -650,12 +746,12 @@ function test_write_binpacking_reified()
     MOI.set(model, MOI.VariableName(), x[2], "x2")
     MOI.set(model, MOI.VariableName(), b, "b")
     @test sprint(write, model) == """
-    include "bin_packing.mzn";
     var int: x1;
     var int: x2;
     var bool: b;
     constraint b <-> bin_packing(2, [x1, x2], [3, 4]);
     solve satisfy;
+    include "bin_packing.mzn";
     """
     return
 end
@@ -685,7 +781,6 @@ function test_write_path()
         MOI.set(model, MOI.VariableName(), es[i], "es$i")
     end
     @test sprint(write, model) == """
-    include "path.mzn";
     var int: s;
     var int: t;
     var bool: ns1;
@@ -699,6 +794,7 @@ function test_write_path()
     var bool: es5;
     constraint path(4, 5, [1, 1, 2, 2, 3], [2, 3, 3, 4, 4], s, t, [ns1, ns2, ns3, ns4], [es1, es2, es3, es4, es5]);
     solve satisfy;
+    include "path.mzn";
     """
     return
 end
@@ -721,7 +817,6 @@ function test_write_cumulative()
         MOI.set(model, MOI.VariableName(), r[i], "r$i")
     end
     @test sprint(write, model) == """
-    include "cumulative.mzn";
     var int: s1;
     var int: s2;
     var int: s3;
@@ -734,6 +829,7 @@ function test_write_cumulative()
     var int: b;
     constraint cumulative([s1, s2, s3], [d1, d2, d3], [r1, r2, r3], b);
     solve satisfy;
+    include "cumulative.mzn";
     """
     return
 end
@@ -758,7 +854,6 @@ function test_write_cumulative_reified()
         MOI.set(model, MOI.VariableName(), r[i], "r$i")
     end
     @test sprint(write, model) == """
-    include "cumulative.mzn";
     var int: s1;
     var int: s2;
     var int: s3;
@@ -772,6 +867,7 @@ function test_write_cumulative_reified()
     var bool: z;
     constraint z <-> cumulative([s1, s2, s3], [d1, d2, d3], [r1, r2, r3], b);
     solve satisfy;
+    include "cumulative.mzn";
     """
     return
 end
@@ -785,12 +881,12 @@ function test_write_table()
         MOI.set(model, MOI.VariableName(), x[i], "x$i")
     end
     @test sprint(write, model) == """
-    include "table.mzn";
     var int: x1;
     var int: x2;
     var int: x3;
     constraint table([x1, x2, x3], [| 1, 1, 0 | 0, 1, 1 |]);
     solve satisfy;
+    include "table.mzn";
     """
     return
 end
@@ -810,12 +906,30 @@ function test_write_table_reified()
         MOI.set(model, MOI.VariableName(), x[i], "x$i")
     end
     @test sprint(write, model) == """
-    include "table.mzn";
     var int: x1;
     var int: x2;
     var int: x3;
     var bool: b;
     constraint b <-> table([x1, x2, x3], [| 1, 1, 0 | 0, 1, 1 |]);
+    solve satisfy;
+    include "table.mzn";
+    """
+    return
+end
+
+function test_write_nonlinear_ifelse()
+    model = MiniZinc.Model{Int}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), x, "x")
+    y, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), y, "y")
+    f1 = MOI.ScalarNonlinearFunction(:>, Any[x, 0])
+    f = MOI.ScalarNonlinearFunction(:ifelse, Any[f1, x, y])
+    MOI.add_constraint(model, f, MOI.EqualTo(1))
+    @test sprint(write, model) == """
+    var int: x;
+    var int: y;
+    constraint (if (x > 0) then x else y endif) = 1;
     solve satisfy;
     """
     return
@@ -825,9 +939,9 @@ function test_model_unsupported_vectoraffine_constraint()
     model = MiniZinc.Model{Int}()
     x = MOI.add_variables(model, 2)
     f = MOI.Utilities.operate(vcat, Int, x[1], 2 * x[2])
-    @test MOI.supports_constraint(model, typeof(f), MOI.AllDifferent) == false
+    @test !MOI.supports_constraint(model, typeof(f), MOI.AllDifferent)
     set = MOI.Reified(MOI.GreaterThan(1))
-    @test MOI.supports_constraint(model, typeof(f), typeof(set)) == true
+    @test MOI.supports_constraint(model, typeof(f), typeof(set))
     return
 end
 
@@ -845,12 +959,12 @@ function test_write_circuit()
         MOI.set(model, MOI.VariableName(), x[i], "x$i")
     end
     @test sprint(write, model) == """
-    include "circuit.mzn";
     var int: x1;
     var int: x2;
     var int: x3;
     constraint circuit([x1, x2, x3]);
     solve satisfy;
+    include "circuit.mzn";
     """
     return
 end
@@ -998,36 +1112,6 @@ function test_moi_int_lin()
     return
 end
 
-function test_moi_send_more_money()
-    model = MOI.Utilities.Model{Int}()
-    S, _ = MOI.add_constrained_variable(model, MOI.Interval(1, 9))
-    E, _ = MOI.add_constrained_variable(model, MOI.Interval(0, 9))
-    N, _ = MOI.add_constrained_variable(model, MOI.Interval(0, 9))
-    D, _ = MOI.add_constrained_variable(model, MOI.Interval(0, 9))
-    M, _ = MOI.add_constrained_variable(model, MOI.Interval(1, 9))
-    O, _ = MOI.add_constrained_variable(model, MOI.Interval(0, 9))
-    R, _ = MOI.add_constrained_variable(model, MOI.Interval(0, 9))
-    Y, _ = MOI.add_constrained_variable(model, MOI.Interval(0, 9))
-    x = [S, E, N, D, M, O, R, Y]
-    MOI.add_constraint.(model, x, MOI.Integer())
-    f =
-        (1_000 * S + 100 * E + 10 * N + D) +
-        (1_000 * M + 100 * O + 10 * R + E) -
-        (10_000 * M + 1_000 * O + 100 * N + 10 * E + Y)
-    MOI.add_constraint.(model, f, MOI.EqualTo(0))
-    MOI.add_constraint(model, MOI.VectorOfVariables(x), MOI.AllDifferent(8))
-    solver = MiniZinc.Optimizer{Int}("chuffed")
-    index_map, _ = MOI.optimize!(solver, model)
-    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
-    @test MOI.get(solver, MOI.ResultCount()) >= 1
-    v = [MOI.get(solver, MOI.VariablePrimal(), index_map[xi]) for xi in x]
-    send = 1_000 * v[1] + 100 * v[2] + 10 * v[3] + v[4]
-    more = 1_000 * v[5] + 100 * v[6] + 10 * v[7] + v[2]
-    money = 10_000 * v[5] + 1_000 * v[6] + 100 * v[3] + 10 * v[2] + v[8]
-    @test send + more == money
-    return
-end
-
 function test_moi_tests()
     model = MOI.Utilities.CachingOptimizer(
         MOI.Utilities.Model{Int}(),
@@ -1062,17 +1146,14 @@ function test_model_filename()
     return
 end
 
-function test_model_nlp_boolean()
-    model = MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Int}())
+function test_model_nonlinear_boolean()
+    model = MOI.Utilities.Model{Int}()
     x = MOI.add_variables(model, 2)
     MOI.add_constraint.(model, x, MOI.ZeroOne())
-    nlp = MOI.Nonlinear.Model()
-    a, b = x
-    MOI.Nonlinear.add_constraint(nlp, :(($a || $b)), MOI.EqualTo(1.0))
-    MOI.Nonlinear.add_constraint(nlp, :(($a && $b)), MOI.EqualTo(0.0))
-    backend = MOI.Nonlinear.ExprGraphOnly()
-    evaluator = MOI.Nonlinear.Evaluator(nlp, backend, x)
-    MOI.set(model, MOI.NLPBlock(), MOI.NLPBlockData(evaluator))
+    for (f, c) in [(:||, 1), (:&&, 0)]
+        snf = MOI.ScalarNonlinearFunction(f, Any[x...])
+        MOI.add_constraint(model, snf, MOI.EqualTo(c))
+    end
     solver = MiniZinc.Optimizer{Int}("chuffed")
     MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
     index_map, _ = MOI.optimize!(solver, model)
@@ -1080,33 +1161,26 @@ function test_model_nlp_boolean()
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     y = [index_map[v] for v in x]
     sol = round.(Bool, MOI.get(solver, MOI.VariablePrimal(), y))
-    @test (sol[1] || sol[2]) == true
-    @test (sol[1] && sol[2]) == false
+    @test (sol[1] || sol[2])
+    @test !(sol[1] && sol[2])
     @test read("test.mzn", String) ==
-          "var bool: x1;\nvar bool: x2;\nconstraint (x1 \\/ x2) == true;\nconstraint (x1 /\\ x2) == false;\nsolve satisfy;\n"
+          "var bool: x1;\nvar bool: x2;\nconstraint (x1 \\/ x2) = 1;\nconstraint (x1 /\\ x2) = 0;\nsolve satisfy;\n"
     rm("test.mzn")
     return
 end
 
-function test_model_nlp_boolean_nested()
-    model = MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Int}())
+function test_model_nonlinear_boolean_nested()
+    model = MOI.Utilities.Model{Int}()
     x = MOI.add_variables(model, 2)
     MOI.add_constraint.(model, x, MOI.ZeroOne())
     y = MOI.add_variable(model)
     MOI.add_constraint(model, y, MOI.Integer())
     MOI.add_constraint(model, y, MOI.Interval(0, 10))
-    nlp = MOI.Nonlinear.Model()
-    a, b = x
-    # a || (b && (y < 5))
-    MOI.Nonlinear.add_constraint(
-        nlp,
-        :(($a || ($b && ($y < 5)))),
-        MOI.EqualTo(1.0),
-    )
-    MOI.Nonlinear.add_constraint(nlp, :($a < 1), MOI.EqualTo(1.0))
-    backend = MOI.Nonlinear.ExprGraphOnly()
-    evaluator = MOI.Nonlinear.Evaluator(nlp, backend, x)
-    MOI.set(model, MOI.NLPBlock(), MOI.NLPBlockData(evaluator))
+    SNF(f::Symbol, args...) = MOI.ScalarNonlinearFunction(f, Any[args...])
+    # x[1] || (x[2] && (y < 5))
+    snf = SNF(:||, x[1], SNF(:&&, x[2], SNF(:<, y, 5)))
+    MOI.add_constraint(model, snf, MOI.GreaterThan(1))
+    MOI.add_constraint(model, SNF(:<, x[1], 1), MOI.EqualTo(1))
     solver = MiniZinc.Optimizer{Int}("chuffed")
     MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
     index_map, _ = MOI.optimize!(solver, model)
@@ -1118,22 +1192,20 @@ function test_model_nlp_boolean_nested()
     @test sol[2] == 1
     @test sol[3] < 5
     @test read("test.mzn", String) ==
-          "var bool: x1;\nvar bool: x2;\nvar 0 .. 10: x3;\nconstraint (x1 \\/ (x2 /\\ (x3 < 5))) == true;\nconstraint (x1 < 1) == true;\nsolve satisfy;\n"
+          "var 0 .. 10: x1;\nvar bool: x2;\nvar bool: x3;\nconstraint (x2 < 1) = 1;\nconstraint (x2 \\/ (x3 /\\ (x1 < 5))) >= 1;\nsolve satisfy;\n"
     rm("test.mzn")
     return
 end
 
-function test_model_nlp_boolean_jump()
-    model = MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Int}())
+function test_model_nonlinear_boolean_jump()
+    model = MOI.Utilities.Model{Int}()
     x = MOI.add_variables(model, 2)
     MOI.add_constraint.(model, x, MOI.ZeroOne())
-    nlp = MOI.Nonlinear.Model()
-    a, b = x
-    MOI.Nonlinear.add_constraint(nlp, :(($a || $b) - 1.0), MOI.EqualTo(0.0))
-    MOI.Nonlinear.add_constraint(nlp, :(($a && $b) - 0.0), MOI.EqualTo(0.0))
-    backend = MOI.Nonlinear.ExprGraphOnly()
-    evaluator = MOI.Nonlinear.Evaluator(nlp, backend, x)
-    MOI.set(model, MOI.NLPBlock(), MOI.NLPBlockData(evaluator))
+    for (f, c) in [(:||, 1), (:&&, 0)]
+        snf1 = MOI.ScalarNonlinearFunction(f, Any[x...])
+        snf2 = MOI.ScalarNonlinearFunction(:-, Any[snf1, c])
+        MOI.add_constraint(model, snf2, MOI.EqualTo(0))
+    end
     solver = MiniZinc.Optimizer{Int}("chuffed")
     MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
     index_map, _ = MOI.optimize!(solver, model)
@@ -1141,28 +1213,23 @@ function test_model_nlp_boolean_jump()
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     y = [index_map[v] for v in x]
     sol = round.(Bool, MOI.get(solver, MOI.VariablePrimal(), y))
-    @test (sol[1] || sol[2]) == true
-    @test (sol[1] && sol[2]) == false
+    @test (sol[1] || sol[2])
+    @test !(sol[1] && sol[2])
     @test read("test.mzn", String) ==
-          "var bool: x1;\nvar bool: x2;\nconstraint ((x1 \\/ x2) - 1) == false;\nconstraint ((x1 /\\ x2) - 0) == false;\nsolve satisfy;\n"
+          "var bool: x1;\nvar bool: x2;\nconstraint ((x1 \\/ x2) - 1) = 0;\nconstraint ((x1 /\\ x2) - 0) = 0;\nsolve satisfy;\n"
     rm("test.mzn")
     return
 end
 
-function test_model_nlp_boolean_registered()
-    model = MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Int}())
+function test_model_nonlinear_boolean_nested_not()
+    model = MOI.Utilities.Model{Int}()
     x = MOI.add_variables(model, 3)
     MOI.add_constraint.(model, x, MOI.ZeroOne())
-    nlp = MOI.Nonlinear.Model()
-    f(args...) = error("evaluation not supported")
-    MOI.Nonlinear.register_operator(nlp, :!, 1, f, f, f)
-    MOI.Nonlinear.register_operator(nlp, :⊻, 2, f, f, f)
-    MOI.Nonlinear.register_operator(nlp, :(=>), 2, f, f, f)
-    a, b, c = x
-    MOI.Nonlinear.add_constraint(nlp, :(($a => !($b ⊻ $c))), MOI.EqualTo(1.0))
-    backend = MOI.Nonlinear.ExprGraphOnly()
-    evaluator = MOI.Nonlinear.Evaluator(nlp, backend, x)
-    MOI.set(model, MOI.NLPBlock(), MOI.NLPBlockData(evaluator))
+    # x1 => !(x2 ⊻ x3)
+    snf1 = MOI.ScalarNonlinearFunction(:⊻, Any[x[2], x[3]])
+    snf2 = MOI.ScalarNonlinearFunction(:!, Any[snf1])
+    snf3 = MOI.ScalarNonlinearFunction(:(=>), Any[x[1], snf2])
+    MOI.add_constraint(model, snf3, MOI.EqualTo(1))
     solver = MiniZinc.Optimizer{Int}("chuffed")
     MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
     index_map, _ = MOI.optimize!(solver, model)
@@ -1172,8 +1239,121 @@ function test_model_nlp_boolean_registered()
     sol = round.(Bool, MOI.get(solver, MOI.VariablePrimal(), y))
     @test ifelse(sol[1], !(sol[2] || sol[3]), true)
     @test read("test.mzn", String) ==
-          "var bool: x1;\nvar bool: x2;\nvar bool: x3;\nconstraint (x1 -> not((x2 xor x3))) == true;\nsolve satisfy;\n"
+          "var bool: x1;\nvar bool: x2;\nvar bool: x3;\nconstraint (x1 -> not((x2 xor x3))) = 1;\nsolve satisfy;\n"
     rm("test.mzn")
+    return
+end
+
+function test_model_nonlinear_bool_model()
+    model = MOI.Utilities.Model{Bool}()
+    x = MOI.add_variables(model, 3)
+    # x1 <--> !(x2 <-- x3)
+    snf1 = MOI.ScalarNonlinearFunction(:(<--), Any[x[2], x[3]])
+    snf2 = MOI.ScalarNonlinearFunction(:!, Any[snf1])
+    snf3 = MOI.ScalarNonlinearFunction(:(<-->), Any[x[1], snf2])
+    MOI.add_constraint(model, snf3, MOI.EqualTo(true))
+    solver = MiniZinc.Optimizer{Bool}("chuffed")
+    MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ResultCount()) >= 1
+    y = [index_map[v] for v in x]
+    sol = MOI.get(solver, MOI.VariablePrimal(), y)
+    @test sol[1] == !ifelse(sol[3], sol[2], true)
+    @test read("test.mzn", String) ==
+          "var bool: x1;\nvar bool: x2;\nvar bool: x3;\nconstraint (x1 <-> not((x2 <- x3))) = true;\nsolve satisfy;\n"
+    rm("test.mzn")
+    return
+end
+
+function test_model_nonlinear_bool_vector_arg()
+    model = MOI.Utilities.Model{Int}()
+    x1 = MOI.add_variables(model, 3)
+    MOI.add_constraint.(model, x1, MOI.ZeroOne())
+    x2 = MOI.add_variables(model, 3)
+    MOI.add_constraint.(model, x2, MOI.ZeroOne())
+    # forall([exists(x1), exists(x2)])
+    snf1 = MOI.ScalarNonlinearFunction(:exists, Any[x1])
+    snf2 = MOI.ScalarNonlinearFunction(:exists, Any[x2])
+    snf3 = MOI.ScalarNonlinearFunction(:forall, Any[[snf1, snf2]])
+    MOI.add_constraint(model, snf3, MOI.EqualTo(1))
+    # count([x1..., x2...]) = 2
+    snf = MOI.ScalarNonlinearFunction(:count, Any[[x1..., x2...]])
+    MOI.add_constraint(model, snf, MOI.EqualTo(2))
+    solver = MiniZinc.Optimizer{Int}("chuffed")
+    MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ResultCount()) >= 1
+    y1 = MOI.get(solver, MOI.VariablePrimal(), [index_map[v] for v in x1])
+    y2 = MOI.get(solver, MOI.VariablePrimal(), [index_map[v] for v in x2])
+    @test sum(y1) == 1
+    @test sum(y2) == 1
+    @test read("test.mzn", String) ==
+          "var bool: x1;\nvar bool: x2;\nvar bool: x3;\nvar bool: x4;\nvar bool: x5;\nvar bool: x6;\nconstraint forall([exists([x1, x2, x3]), exists([x4, x5, x6])]) = 1;\nconstraint count([x1, x2, x3, x4, x5, x6]) = 2;\nsolve satisfy;\n"
+    rm("test.mzn")
+    return
+end
+
+function test_model_nonlinear_alldifferent_reified()
+    model = MiniZinc.Model{Int}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), x, "x")
+    y, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), y, "y")
+    z, _ = MOI.add_constrained_variable(model, MOI.ZeroOne())
+    MOI.set(model, MOI.VariableName(), z, "z")
+    xy = [x, y]
+    MOI.add_constraint.(model, xy, MOI.GreaterThan(1))
+    MOI.add_constraint.(model, xy, MOI.LessThan(3))
+    f1 = MOI.ScalarNonlinearFunction(:alldifferent, Any[xy])
+    f2 = MOI.ScalarNonlinearFunction(:reified, Any[z, f1])
+    MOI.add_constraint(model, f2, MOI.EqualTo(1))
+    MOI.add_constraint(model, z, MOI.EqualTo(0))
+    solver = MiniZinc.Optimizer{Int}("chuffed")
+    MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ResultCount()) >= 1
+    xy_sol = MOI.get(solver, MOI.VariablePrimal(), [index_map[v] for v in xy])
+    z_sol = MOI.get(solver, MOI.VariablePrimal(), index_map[z])
+    @test !allunique(xy_sol)
+    @test iszero(z_sol)
+    @test read("test.mzn", String) ==
+          "var bool: z;\nconstraint bool_eq(z, false);\nvar 1 .. 3: x;\nvar 1 .. 3: y;\nconstraint (z <-> alldifferent([x, y])) = 1;\nsolve satisfy;\ninclude \"alldifferent.mzn\";\n"
+    rm("test.mzn")
+    return
+end
+
+function test_unsupported_nonlinear_operator()
+    model = MOI.Utilities.Model{Int}()
+    x = MOI.add_variable(model)
+    snf = MOI.ScalarNonlinearFunction(:my_f, Any[x])
+    MOI.add_constraint(model, snf, MOI.EqualTo(1))
+    solver = MiniZinc.Optimizer{Int}("chuffed")
+    MOI.set(solver, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
+    @test_throws(
+        MOI.UnsupportedNonlinearOperator(:my_f),
+        MOI.optimize!(solver, model),
+    )
+    rm("test.mzn")
+    return
+end
+
+function test_supported_operators()
+    model = MiniZinc.Model{Int}()
+    ops = MOI.get(model, MOI.ListOfSupportedNonlinearOperators())
+    @test ops isa Vector{Symbol}
+    @test :(!) in ops
+    @test :|| in ops
+    @test :* in ops
+    @test :⊻ in ops
+    @test :(<-->) in ops
+    @test :forall in ops
+    @test :count in ops
+    @test :alldifferent in ops
+    @test :reified in ops
+    @test :ifelse in ops
     return
 end
 
@@ -1189,7 +1369,7 @@ function test_write_bool()
     return
 end
 
-function test_highs()
+function test_highs_feasibility()
     model = MOI.Utilities.Model{Float64}()
     x, x_int = MOI.add_constrained_variable(model, MOI.Integer())
     c1 = MOI.add_constraint(model, x, MOI.GreaterThan(1.0))
@@ -1203,6 +1383,29 @@ function test_highs()
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) in [1.0, 2.0, 3.0]
+    @test MOI.get(solver, MOI.RawStatusString()) == "SATISFIABLE"
+    return
+end
+
+function test_highs_optimization()
+    model = MOI.Utilities.Model{Float64}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.add_constraint(model, x, MOI.Interval(1.0, 10.0))
+    MOI.set(model, MOI.ObjectiveFunction{typeof(x)}(), x)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    solver = MiniZinc.Optimizer{Int}("highs")
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ResultCount()) >= 1
+    @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) == 10.0
+    @test MOI.get(solver, MOI.ObjectiveValue()) == 10.0
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+    solver = MiniZinc.Optimizer{Int}("highs")
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ResultCount()) >= 1
+    @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) == 1.0
+    @test MOI.get(solver, MOI.ObjectiveValue()) == 1.0
     @test MOI.get(solver, MOI.RawStatusString()) == "SATISFIABLE"
     return
 end

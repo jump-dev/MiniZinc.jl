@@ -44,8 +44,8 @@ MOI.Utilities.@model(
         ReifiedGreaterThan,
         ReifiedEqualTo,
     ),
-    (),
-    (MOI.ScalarAffineFunction,),
+    (MOI.ScalarNonlinearFunction,),
+    (MOI.ScalarAffineFunction, MOI.ScalarQuadraticFunction),
     (MOI.VectorOfVariables,),
     (MOI.VectorAffineFunction,)
 )
@@ -80,12 +80,50 @@ function MOI.supports_constraint(
     return true
 end
 
-MOI.supports(::Model, ::MOI.NLPBlock) = true
+const _SPECIAL_OPS = Set([:ifelse])
 
-function MOI.set(model::Model, ::MOI.NLPBlock, data::MOI.NLPBlockData)
-    model.ext[:nlp_block] = data
-    return
-end
+const _PREFIX_OPS = Dict(
+    :(!) => "not",
+    :abs => "abs",
+    :exists => "exists",
+    :forall => "forall",
+    :count => "count",
+    :alldifferent => "alldifferent",
+    :sum => "sum",
+    :maximum => "max",
+    :minimum => "min",
+    :bool2int => "bool2int",
+)
+
+const _INFIX_OPS = Dict(
+    :|| => "\\/",
+    :&& => "/\\",
+    :- => "-",
+    :+ => "+",
+    :* => "*",
+    :∧ => "∧",
+    :(==) => "=",
+    :(<) => "<",
+    :(>) => ">",
+    :(<=) => "<=",
+    :(>=) => ">=",
+    :(=>) => "->",
+    :(-->) => "->",
+    :(<--) => "<-",
+    :⊻ => "xor",
+    :(<-->) => "<->",
+    :reified => "<->",
+    :(!=) => "!=",
+)
+
+const _SUPPORTED_OPS = reduce(
+    vcat,
+    collect(d) for d in [_SPECIAL_OPS, keys(_PREFIX_OPS), keys(_INFIX_OPS)]
+)
+
+const _PREDICATE_NAMES = Set(["alldifferent"])
+
+MOI.get(::Model, ::MOI.ListOfSupportedNonlinearOperators) = _SUPPORTED_OPS
 
 include("write.jl")
 include("optimize.jl")
