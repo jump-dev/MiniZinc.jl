@@ -1442,7 +1442,7 @@ end
 
 function test_version_number()
     solver = MiniZinc.Optimizer{Float64}("highs")
-    version = MOI.get(model, MOI.SolverVersion())
+    version = MOI.get(solver, MOI.SolverVersion())
     @test version isa VersionNumber
     @test version >= v"2.7.4"
     return
