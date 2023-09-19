@@ -77,12 +77,13 @@ function _run_minizinc(dest::Optimizer)
     end
     output = joinpath(dir, "model.ozn")
     _stdout = joinpath(dir, "_stdout.txt")
-    time_limit = ""
-    if dest.time_limit_sec !== nothing
-        time_limit = "--time-limit $(1_000 * dest.time_limit_sec)"
-    end
     _minizinc_exe() do exe
-        cmd = `$(exe) --solver $(dest.solver) --output-objective $time_limit -o $(output) $(filename)`
+        cmd = if dest.time_limit_sec !== nothing
+            limit = 1_000 * dest.time_limit_sec::Float64
+            `$(exe) --solver $(dest.solver) --output-objective --time-limit $limit -o $(output) $(filename)`
+        else
+            `$(exe) --solver $(dest.solver) --output-objective -o $(output) $(filename)`
+        end
         return run(pipeline(cmd, stdout = _stdout))
     end
     if isfile(output)
