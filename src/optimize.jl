@@ -27,13 +27,24 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
     primal_objective::T
     primal_solution::Dict{MOI.VariableIndex,T}
     options::Dict{String,Any}
+    time_limit_sec::Union{Nothing,Float64}
+    solve_time_sec::Float64
     function Optimizer{T}(solver::String) where {T}
         if solver == "chuffed"
             solver = Chuffed()
         end
         primal_solution = Dict{MOI.VariableIndex,T}()
         options = Dict{String,Any}("model_filename" => "")
-        return new(solver, Model{T}(), "", zero(T), primal_solution, options)
+        return new(
+            solver,
+            Model{T}(),
+            "",
+            zero(T),
+            primal_solution,
+            options,
+            nothing,
+            NaN,
+        )
     end
 end
 
@@ -66,8 +77,12 @@ function _run_minizinc(dest::Optimizer)
     end
     output = joinpath(dir, "model.ozn")
     _stdout = joinpath(dir, "_stdout.txt")
+    time_limit = ""
+    if dest.time_limit_sec !== nothing
+        time_limit = "--time-limit $(1_000 * dest.time_limit_sec)"
+    end
     _minizinc_exe() do exe
-        cmd = `$(exe) --solver $(dest.solver) --output-objective -o $(output) $(filename)`
+        cmd = `$(exe) --solver $(dest.solver) --output-objective $time_limit -o $(output) $(filename)`
         return run(pipeline(cmd, stdout = _stdout))
     end
     if isfile(output)
@@ -90,6 +105,7 @@ function MOI.empty!(model::Optimizer{T}) where {T}
     model.solver_status = ""
     model.primal_objective = zero(T)
     empty!(model.primal_solution)
+    model.solve_time_sec = NaN
     return
 end
 
@@ -103,6 +119,20 @@ end
 
 function MOI.set(model::Optimizer, attr::MOI.RawOptimizerAttribute, value)
     model.options[attr.name] = value
+    return
+end
+
+MOI.supports(::Optimizer, ::MOI.TimeLimitSec) = true
+
+MOI.get(model::Optimizer, ::MOI.TimeLimitSec) = model.time_limit_sec
+
+function MOI.set(model::Optimizer, ::MOI.TimeLimitSec, value::Real)
+    model.time_limit_sec = convert(Float64, value)
+    return
+end
+
+function MOI.set(model::Optimizer, ::MOI.TimeLimitSec, ::Nothing)
+    model.time_limit_sec = nothing
     return
 end
 
@@ -129,6 +159,7 @@ function _parse_result(::Type{T}, s::AbstractString) where {T}
 end
 
 function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
+    time_start = time()
     MOI.empty!(dest.inner)
     empty!(dest.primal_solution)
     index_map = MOI.copy_to(dest.inner, src)
@@ -157,6 +188,7 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
             end
         end
     end
+    dest.solve_time_sec = time() - time_start
     return index_map, false
 end
 
