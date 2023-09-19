@@ -1410,6 +1410,36 @@ function test_highs_optimization()
     return
 end
 
+function test_time_limit_sec()
+    solver = MiniZinc.Optimizer{Int}("highs")
+    @test MOI.supports(solver, MOI.TimeLimitSec())
+    @test MOI.get(solver, MOI.TimeLimitSec()) === nothing
+    MOI.set(solver, MOI.TimeLimitSec(), 1)
+    @test MOI.get(solver, MOI.TimeLimitSec()) == 1.0
+    MOI.set(solver, MOI.TimeLimitSec(), nothing)
+    @test MOI.get(solver, MOI.TimeLimitSec()) === nothing
+    return
+end
+
+function test_highs_optimization_time_limit()
+    model = MOI.Utilities.Model{Float64}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.add_constraint(model, x, MOI.Interval(1.0, 10.0))
+    MOI.set(model, MOI.ObjectiveFunction{typeof(x)}(), x)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    solver = MiniZinc.Optimizer{Float64}("highs")
+    @test isnan(MOI.get(solver, MOI.SolveTimeSec()))
+    MOI.set(solver, MOI.TimeLimitSec(), 9e-4) # Very small limit
+    index_map, _ = MOI.optimize!(solver, model)
+    @test !isnan(MOI.get(solver, MOI.SolveTimeSec()))
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OTHER_ERROR
+    solver = MiniZinc.Optimizer{Float64}("highs")
+    MOI.set(solver, MOI.TimeLimitSec(), 100)
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    return
+end
+
 end
 
 TestMiniZinc.runtests()
