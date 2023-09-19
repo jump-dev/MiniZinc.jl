@@ -94,6 +94,16 @@ function _run_minizinc(dest::Optimizer)
     return ""
 end
 
+function MOI.get(model::Optimizer, ::MOI.SolverVersion)
+    output = sprint() do io
+        return _minizinc_exe() do exe
+            return run(pipeline(`$(exe) --version`; stdout = io))
+        end
+    end
+    m = match(r"version (\d+.\d+.\d+)", output)::RegexMatch
+    return VersionNumber(m[1])
+end
+
 # The MOI interface
 
 MOI.get(model::Optimizer, ::MOI.SolverName) = "MiniZinc"
