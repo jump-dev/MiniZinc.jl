@@ -241,3 +241,5 @@ function MOI.get(
     MOI.throw_if_not_valid(model, x)
     return model.primal_solution[x]
 end
+
+MOI.get(model::Optimizer, ::MOI.SolveTimeSec) = model.solve_time_sec
