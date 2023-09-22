@@ -7,9 +7,8 @@
 # based on MiniZinc example nqueens.mzn
 # queen in column i is in row q[i]
 
-n = 8
-
 function _init_model()
+    n = 8
     model = MOI.instantiate(
         () -> MiniZinc.Optimizer{Int}("chuffed");
         with_cache_type = Int,
@@ -32,6 +31,7 @@ function _check_result(
     actual_count = 92,
     termination_status = MOI.OPTIMAL,
 )
+    n = 8
     @test MOI.get(model, MOI.TerminationStatus()) === termination_status
     res_count = MOI.get(model, MOI.ResultCount())
     @test res_count == actual_count

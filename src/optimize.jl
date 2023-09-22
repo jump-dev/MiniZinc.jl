@@ -190,8 +190,6 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
             for line in split(ret, "\n")
                 m_var = match(r"(.+) \= (.+)\;", line)
                 if m_var === nothing
-                    isempty(primal_solution) ||
-                        push!(dest.primal_solutions, primal_solution) # add solution
                     if !isempty(primal_solution)
                         # We found a line in the output that is not a variable
                         # statement. It must divide the solutions, so append
@@ -263,9 +261,6 @@ function MOI.get(
 )
     MOI.check_result_index_bounds(model, attr)
     MOI.throw_if_not_valid(model, x)
-    if attr.result_index > length(model.primal_solutions)
-        throw(ErrorException("Result index out of bounds."))
-    end
     return model.primal_solutions[attr.result_index][x]
 end
 
