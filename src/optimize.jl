@@ -132,7 +132,8 @@ end
 
 function MOI.set(model::Optimizer, attr::MOI.RawOptimizerAttribute, value)
     if attr.name == "num_solutions" && !(value isa Int && value >= 1)
-        throw(MOI.SetAttributeNotAllowed("value must be an `Int` that is >= 1"))
+        msg = "value must be an `Int` that is >= 1"
+        throw(MOI.SetAttributeNotAllowed(attr, msg))
     end
     model.options[attr.name] = value
     return
