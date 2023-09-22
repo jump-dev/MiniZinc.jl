@@ -84,7 +84,6 @@ function _run_minizinc(dest::Optimizer)
             limit = round(Int, 1_000 * dest.time_limit_sec::Float64)
             cmd = `$cmd --time-limit $limit`
         end
-
         if dest.options["num_solutions"] > 1
             cmd = `$cmd --num-solutions $(dest.options["num_solutions"])`
         end
