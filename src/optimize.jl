@@ -25,23 +25,25 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
     inner::Model{T}
     solver_status::String
     primal_objective::T
-    primal_solution::Dict{MOI.VariableIndex,T}
+    primal_solutions::Vector{Dict{MOI.VariableIndex, T}} # all solutions
     options::Dict{String,Any}
+    n_sols::Int # Max number of solutions
     time_limit_sec::Union{Nothing,Float64}
     solve_time_sec::Float64
     function Optimizer{T}(solver::String) where {T}
         if solver == "chuffed"
             solver = Chuffed()
         end
-        primal_solution = Dict{MOI.VariableIndex,T}()
-        options = Dict{String,Any}("model_filename" => "")
+        primal_solutions = Vector{Dict{MOI.VariableIndex,T}}()
+        options = Dict{String,Any}("model_filename" => "", "all_solutions" => false)
         return new(
             solver,
             Model{T}(),
             "",
             zero(T),
-            primal_solution,
+            primal_solutions,
             options,
+            1,
             nothing,
             NaN,
         )
@@ -77,13 +79,23 @@ function _run_minizinc(dest::Optimizer)
     end
     output = joinpath(dir, "model.ozn")
     _stdout = joinpath(dir, "_stdout.txt")
+
+    dest.n_sols = if dest.options["all_solutions"]
+        get(dest.options, "num_solutions", (Int)(typemax(Int32)))
+    else
+        1 # only one solution if all_solutions is false
+    end
+
     _minizinc_exe() do exe
-        cmd = if dest.time_limit_sec !== nothing
+        cmd = `$(exe) --solver $(dest.solver) --output-objective -o $(output) $(filename)`
+
+        if dest.time_limit_sec !== nothing 
             limit = round(Int, 1_000 * dest.time_limit_sec::Float64)
-            `$(exe) --solver $(dest.solver) --output-objective --time-limit $limit -o $(output) $(filename)`
-        else
-            `$(exe) --solver $(dest.solver) --output-objective -o $(output) $(filename)`
+            cmd = `$cmd --time-limit $limit` 
         end
+        if dest.n_sols > 1 # only add --num-solutions if n_sols > 1
+            cmd = `$cmd --num-solutions $(dest.n_sols)`
+        end 
         return run(pipeline(cmd, stdout = _stdout))
     end
     if isfile(output)
@@ -115,7 +127,7 @@ function MOI.empty!(model::Optimizer{T}) where {T}
     empty!(model.inner.ext)
     model.solver_status = ""
     model.primal_objective = zero(T)
-    empty!(model.primal_solution)
+    empty!(model.primal_solutions)
     model.solve_time_sec = NaN
     return
 end
@@ -172,8 +184,10 @@ end
 function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     time_start = time()
     MOI.empty!(dest.inner)
-    empty!(dest.primal_solution)
+    empty!(dest.primal_solutions)
     index_map = MOI.copy_to(dest.inner, src)
+
+
     ret = _run_minizinc(dest)
     if !isempty(ret)
         m_stat = match(r"=====(.+)=====", ret)
@@ -186,15 +200,19 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
                 MOI.get(dest.inner, MOI.VariableName(), x) => x for
                 x in MOI.get(src, MOI.ListOfVariableIndices())
             )
+
+            primal_solution = Dict{MOI.VariableIndex, T}()
             for line in split(ret, "\n")
                 m_var = match(r"(.+) \= (.+)\;", line)
                 if m_var === nothing
+                    isempty(primal_solution) || push!(dest.primal_solutions, primal_solution) # add solution
+                    primal_solution = Dict{MOI.VariableIndex, T}()
                     continue
                 elseif m_var[1] == "_objective"
                     dest.primal_objective = _parse_result(T, m_var[2])
                 else
                     x = variable_map[m_var[1]]
-                    dest.primal_solution[x] = _parse_result(T, m_var[2])
+                    primal_solution[x] = _parse_result(T, m_var[2])
                 end
             end
         end
@@ -209,7 +227,7 @@ end
 
 function _has_solution(model::Optimizer)
     return model.solver_status == "SATISFIABLE" &&
-           !isempty(model.primal_solution)
+           !isempty(model.primal_solutions)
 end
 
 MOI.get(model::Optimizer, ::MOI.RawStatusString) = model.solver_status
@@ -218,7 +236,11 @@ function MOI.get(model::Optimizer, ::MOI.TerminationStatus)
     if model.solver_status == "UNSATISFIABLE"
         return MOI.INFEASIBLE
     elseif _has_solution(model)
-        return MOI.OPTIMAL
+        if model.n_sols > 1 && length(model.primal_solutions) >= model.n_sols
+            return MOI.SOLUTION_LIMIT
+        else 
+            return MOI.OPTIMAL
+        end
     else
         return MOI.OTHER_ERROR
     end
@@ -234,23 +256,32 @@ end
 
 MOI.get(::Optimizer, ::MOI.DualStatus) = MOI.NO_SOLUTION
 
-function MOI.get(model::Optimizer, ::MOI.ResultCount)
-    return _has_solution(model) ? 1 : 0
-end
+MOI.get(model::Optimizer, ::MOI.ResultCount) = length(model.primal_solutions)
 
 function MOI.get(model::Optimizer, attr::MOI.ObjectiveValue)
     MOI.check_result_index_bounds(model, attr)
     return model.primal_objective
 end
 
-function MOI.get(
-    model::Optimizer,
-    attr::MOI.VariablePrimal,
-    x::MOI.VariableIndex,
-)
+function MOI.get(model::Optimizer, attr::MOI.VariablePrimal, x::MOI.VariableIndex)
     MOI.check_result_index_bounds(model, attr)
     MOI.throw_if_not_valid(model, x)
-    return model.primal_solution[x]
+    if attr.result_index > length(model.primal_solutions)
+        throw(ErrorException("Result index out of bounds."))
+    end
+    return model.primal_solutions[attr.result_index][x]
 end
 
 MOI.get(model::Optimizer, ::MOI.SolveTimeSec) = model.solve_time_sec
+
+function MOI.set(model::Optimizer, attr::MOI.RawOptimizerAttribute, value)
+    if attr.name == "all_solutions"
+        value === true ||
+            value === false ||
+            throw(ErrorException("Invalid value $value for $(attr.name)."))
+    elseif attr.name == "num_solutions"
+        (value isa Int && value >= 1) ||
+            throw(ErrorException("Invalid value $value for $(attr.name)."))
+    end
+    model.options[attr.name] = value
+end
