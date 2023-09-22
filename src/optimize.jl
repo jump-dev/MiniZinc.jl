@@ -77,7 +77,6 @@ function _run_minizinc(dest::Optimizer)
     end
     output = joinpath(dir, "model.ozn")
     _stdout = joinpath(dir, "_stdout.txt")
-
     _minizinc_exe() do exe
         cmd = `$(exe) --solver $(dest.solver) --output-objective -o $(output) $(filename)`
 
