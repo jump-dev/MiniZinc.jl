@@ -3,11 +3,7 @@
 # Use of this source code is governed by an MIT-style license that can be found
 # in the LICENSE.md file or at https://opensource.org/licenses/MIT.
 
-# N-queens example - solve_all
-# based on MiniZinc example nqueens.mzn
-# queen in column i is in row q[i]
-
-function _init_model()
+function _init_nqueens_solve_num_solutions()
     n = 8
     model = MOI.instantiate(
         () -> MiniZinc.Optimizer{Int}("chuffed");
@@ -25,13 +21,14 @@ function _init_model()
     return model, q
 end
 
-function _check_result(
+function _test_nqueens_solve_num_solutions(
     model,
     q,
     actual_count = 92,
     termination_status = MOI.OPTIMAL,
 )
     n = 8
+    MOI.optimize!(model)
     @test MOI.get(model, MOI.TerminationStatus()) === termination_status
     res_count = MOI.get(model, MOI.ResultCount())
     @test res_count == actual_count
@@ -41,64 +38,45 @@ function _check_result(
         @test allunique(q_sol .+ (1:n))
         @test allunique(q_sol .- (1:n))
     end
-
     @test MOI.get(model, MOI.SolveTimeSec()) < 4.0
     rm("test.mzn")
     return
 end
 
-function test_nqueens_solve_all1() # solve all with limit > 92
-    @info "test solve_all with limit > 92"
-    model, q = _init_model()
+function test_nqueens_solve_num_solutions_100()
+    model, q = _init_nqueens_solve_num_solutions()
     MOI.set(model, MOI.RawOptimizerAttribute("num_solutions"), 100)
-    MOI.optimize!(model)
-    return _check_result(model, q)
+    _test_nqueens_solve_num_solutions(model, q)
+    return
 end
 
-function test_nqueens_solve_all2() # solve all with limit = 25 
-    @info "test solve_all with limit = 25"
-    model, q = _init_model()
+function test_nqueens_solve_num_solutions_25()
+    model, q = _init_nqueens_solve_num_solutions()
     MOI.set(model, MOI.RawOptimizerAttribute("num_solutions"), 25)
-    MOI.optimize!(model)
-    return _check_result(model, q, 25, MOI.SOLUTION_LIMIT)
+    _test_nqueens_solve_num_solutions(model, q, 25, MOI.SOLUTION_LIMIT)
+    return
 end
 
-function test_nqueens_solve_one1() # solve one with limit not set
-    @info "test solve_one with limit not set"
-    model, q = _init_model()
-    MOI.optimize!(model)
-    return _check_result(model, q, 1)
+function test_nqueens_solve_num_solutions_not_set()
+    model, q = _init_nqueens_solve_num_solutions()
+    _test_nqueens_solve_num_solutions(model, q, 1)
+    return
 end
 
-function test_nqueens_solve_one2() # solve one with limit = 1
-    @info "test solve_one with limit = 1"
-    model, q = _init_model()
+function test_nqueens_solve_num_solutions_1()
+    model, q = _init_nqueens_solve_num_solutions()
     MOI.set(model, MOI.RawOptimizerAttribute("num_solutions"), 1)
-    MOI.optimize!(model)
-    return _check_result(model, q, 1)
+    _test_nqueens_solve_num_solutions(model, q, 1)
+    return
 end
 
-function test_nqueens_throw() # test throw
-    @info "test throw"
-    model, _ = _init_model()
-    @test_throws ErrorException MOI.set(
-        model,
-        MOI.RawOptimizerAttribute("num_solutions"),
-        -1,
-    )
-    @test_throws ErrorException MOI.set(
-        model,
-        MOI.RawOptimizerAttribute("num_solutions"),
-        0,
-    )
-    @test_throws ErrorException MOI.set(
-        model,
-        MOI.RawOptimizerAttribute("num_solutions"),
-        1.1,
-    )
-    @test_throws ErrorException MOI.set(
-        model,
-        MOI.RawOptimizerAttribute("num_solutions"),
-        "two",
-    )
+function test_nqueens_num_solutions_throw()
+    model, _ = _init_nqueens_solve_num_solutions()
+    for value in (-1, 0, 1.1, "two")
+        @test_throws(
+            MOI.SetAttributeNotAllowed,
+            MOI.set(model, MOI.RawOptimizerAttribute("num_solutions"), -1),
+        )
+    end
+    return
 end
