@@ -47,7 +47,7 @@ function _check_result(
     return
 end
 
-function test_solve_all1() # solve all with limit > 92
+function test_nqueens_solve_all1() # solve all with limit > 92
     @info "test solve_all with limit > 92"
     model, q = _init_model()
     MOI.set(model, MOI.RawOptimizerAttribute("num_solutions"), 100)
@@ -55,7 +55,7 @@ function test_solve_all1() # solve all with limit > 92
     return _check_result(model, q)
 end
 
-function test_solve_all2() # solve all with limit = 25 
+function test_nqueens_solve_all2() # solve all with limit = 25 
     @info "test solve_all with limit = 25"
     model, q = _init_model()
     MOI.set(model, MOI.RawOptimizerAttribute("num_solutions"), 25)
@@ -63,14 +63,14 @@ function test_solve_all2() # solve all with limit = 25
     return _check_result(model, q, 25, MOI.SOLUTION_LIMIT)
 end
 
-function test_solve_one1() # solve one with limit not set
+function test_nqueens_solve_one1() # solve one with limit not set
     @info "test solve_one with limit not set"
     model, q = _init_model()
     MOI.optimize!(model)
     return _check_result(model, q, 1)
 end
 
-function test_solve_one2() # solve one with limit = 1
+function test_nqueens_solve_one2() # solve one with limit = 1
     @info "test solve_one with limit = 1"
     model, q = _init_model()
     MOI.set(model, MOI.RawOptimizerAttribute("num_solutions"), 1)
@@ -78,7 +78,7 @@ function test_solve_one2() # solve one with limit = 1
     return _check_result(model, q, 1)
 end
 
-function test_throw() # test throw
+function test_nqueens_throw() # test throw
     @info "test throw"
     model, _ = _init_model()
     @test_throws ErrorException MOI.set(
