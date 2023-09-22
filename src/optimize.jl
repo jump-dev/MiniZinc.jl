@@ -130,6 +130,14 @@ function MOI.get(model::Optimizer, attr::MOI.RawOptimizerAttribute)
     return get(model.options, attr.name, nothing)
 end
 
+function MOI.set(model::Optimizer, attr::MOI.RawOptimizerAttribute, value)
+    if attr.name == "num_solutions" && !(value isa Int && value >= 1)
+        throw(MOI.SetAttributeNotAllowed("value must be an `Int` that is >= 1"))
+    end
+    model.options[attr.name] = value
+    return
+end
+
 MOI.supports(::Optimizer, ::MOI.TimeLimitSec) = true
 
 MOI.get(model::Optimizer, ::MOI.TimeLimitSec) = model.time_limit_sec
@@ -223,8 +231,7 @@ function MOI.get(model::Optimizer, ::MOI.TerminationStatus)
     if model.solver_status == "UNSATISFIABLE"
         return MOI.INFEASIBLE
     elseif _has_solution(model)
-        if model.options["num_solutions"] > 1 &&
-           length(model.primal_solutions) >= model.options["num_solutions"]
+        if 1 < model.options["num_solutions"] <= length(model.primal_solutions)
             return MOI.SOLUTION_LIMIT
         else
             return MOI.OPTIMAL
@@ -262,13 +269,3 @@ function MOI.get(
 end
 
 MOI.get(model::Optimizer, ::MOI.SolveTimeSec) = model.solve_time_sec
-
-function MOI.set(model::Optimizer, attr::MOI.RawOptimizerAttribute, value)
-    if attr.name == "num_solutions"
-        (value isa Int && value >= 1) ||
-            throw(ErrorException("Invalid value $value for $(attr.name)."))
-    end
-
-    model.options[attr.name] = value
-    return
-end
