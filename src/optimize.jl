@@ -202,7 +202,6 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
                         push!(dest.primal_solutions, copy(primal_solution))
                         empty!(primal_solution)
                     end
-                    continue
                 elseif m_var[1] == "_objective"
                     dest.primal_objective = _parse_result(T, m_var[2])
                 else
