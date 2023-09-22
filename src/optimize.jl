@@ -79,7 +79,6 @@ function _run_minizinc(dest::Optimizer)
     _stdout = joinpath(dir, "_stdout.txt")
     _minizinc_exe() do exe
         cmd = `$(exe) --solver $(dest.solver) --output-objective -o $(output) $(filename)`
-
         if dest.time_limit_sec !== nothing
             limit = round(Int, 1_000 * dest.time_limit_sec::Float64)
             cmd = `$cmd --time-limit $limit`
