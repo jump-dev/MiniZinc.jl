@@ -23,7 +23,6 @@ function _init_model()
         f = MOI.Utilities.vectorize([op(q[i], i) for i in eachindex(q)])
         MOI.add_constraint(model, f, MOI.AllDifferent(n))
     end
-
     return model, q
 end
 
@@ -36,7 +35,6 @@ function _check_result(
     @test MOI.get(model, MOI.TerminationStatus()) === termination_status
     res_count = MOI.get(model, MOI.ResultCount())
     @test res_count == actual_count
-
     for i in 1:res_count
         q_sol = MOI.get(model, MOI.VariablePrimal(i), q)
         @test allunique(q_sol)

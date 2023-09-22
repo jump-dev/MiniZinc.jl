@@ -25,7 +25,7 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
     inner::Model{T}
     solver_status::String
     primal_objective::T
-    primal_solutions::Vector{Dict{MOI.VariableIndex,T}} # all solutions
+    primal_solutions::Vector{Dict{MOI.VariableIndex,T}}
     options::Dict{String,Any}
     time_limit_sec::Union{Nothing,Float64}
     solve_time_sec::Float64
@@ -174,7 +174,6 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     MOI.empty!(dest.inner)
     empty!(dest.primal_solutions)
     index_map = MOI.copy_to(dest.inner, src)
-
     ret = _run_minizinc(dest)
     if !isempty(ret)
         m_stat = match(r"=====(.+)=====", ret)
@@ -187,14 +186,19 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
                 MOI.get(dest.inner, MOI.VariableName(), x) => x for
                 x in MOI.get(src, MOI.ListOfVariableIndices())
             )
-
             primal_solution = Dict{MOI.VariableIndex,T}()
             for line in split(ret, "\n")
                 m_var = match(r"(.+) \= (.+)\;", line)
                 if m_var === nothing
                     isempty(primal_solution) ||
                         push!(dest.primal_solutions, primal_solution) # add solution
-                    primal_solution = Dict{MOI.VariableIndex,T}()
+                    if !isempty(primal_solution)
+                        # We found a line in the output that is not a variable
+                        # statement. It must divide the solutions, so append
+                        # the current.
+                        push!(dest.primal_solutions, copy(primal_solution))
+                        empty!(primal_solution)
+                    end
                     continue
                 elseif m_var[1] == "_objective"
                     dest.primal_objective = _parse_result(T, m_var[2])
