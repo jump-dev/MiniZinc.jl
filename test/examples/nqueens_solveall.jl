@@ -75,7 +75,7 @@ function test_nqueens_num_solutions_throw()
     for value in (-1, 0, 1.1, "two")
         @test_throws(
             MOI.SetAttributeNotAllowed,
-            MOI.set(model, MOI.RawOptimizerAttribute("num_solutions"), -1),
+            MOI.set(model, MOI.RawOptimizerAttribute("num_solutions"), value),
         )
     end
     return
