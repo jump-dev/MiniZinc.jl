@@ -238,7 +238,7 @@ function MOI.get(model::Optimizer, ::MOI.TerminationStatus)
         end
     elseif model.solver_status == "UNKNOWN" &&
            model.time_limit_sec !== nothing &&
-           abs(model.solve_time_sec - model.time_limit_sec) < 1
+           model.solve_time_sec >= model.time_limit_sec
         return MOI.TIME_LIMIT   # The solver timed out
     else
         return MOI.OTHER_ERROR
