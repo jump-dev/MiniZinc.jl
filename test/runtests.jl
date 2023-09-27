@@ -1432,7 +1432,7 @@ function test_highs_optimization_time_limit()
     MOI.set(solver, MOI.TimeLimitSec(), 9e-4) # Very small limit
     index_map, _ = MOI.optimize!(solver, model)
     @test !isnan(MOI.get(solver, MOI.SolveTimeSec()))
-    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OTHER_ERROR
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.TIME_LIMIT
     solver = MiniZinc.Optimizer{Float64}("highs")
     MOI.set(solver, MOI.TimeLimitSec(), 100)
     index_map, _ = MOI.optimize!(solver, model)
