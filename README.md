@@ -57,8 +57,7 @@ z₁ + z₂ = 1
 ```julia
 julia> import MiniZinc
 
-julia> const MOI = MiniZinc.MOI
-MathOptInterface
+julia> import MathOptInterface as MOI
 
 julia> function main()
            model = MOI.Utilities.CachingOptimizer(
