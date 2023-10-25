@@ -99,7 +99,9 @@ julia> main()
 ## Use with JuMP
 
 You can also call MiniZinc from JuMP, using any solver that `libminizinc`
-supports. By default, MiniZinc.jl is compiled with `"highs"`:
+supports. By default, MiniZinc.jl is compiled with the
+[HiGHS](https://github.com/ERGO-Code/HiGHS) MILP solver,
+which can be selected by passing the `"highs"` parameter to `MiniZinc.Optimizer`:
 
 ```julia
 using JuMP
