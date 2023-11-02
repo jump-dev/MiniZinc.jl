@@ -34,7 +34,8 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
             solver = Chuffed()
         end
         primal_solutions = Dict{MOI.VariableIndex,T}[]
-        options = Dict{String,Any}("model_filename" => "", "solution_limit" => 1)
+        options =
+            Dict{String,Any}("model_filename" => "", "solution_limit" => 1)
         return new(
             solver,
             Model{T}(),
@@ -84,7 +85,7 @@ function _run_minizinc(dest::Optimizer)
             cmd = `$cmd --time-limit $limit`
         end
         if dest.options["solution_limit"] > 1
-           cmd = `$cmd --num-solutions $(dest.options["solution_limit"])`
+            cmd = `$cmd --num-solutions $(dest.options["solution_limit"])`
         end
         @info "[MiniZinc] Cmd = $cmd"
         return run(pipeline(cmd, stdout = _stdout))
@@ -131,7 +132,7 @@ function MOI.set(model::Optimizer, attr::MOI.SolutionLimit, value)
         msg = "[MiniZinc] SolutionLimit must be an `Int` that is >= 1"
         throw(MOI.SetAttributeNotAllowed(attr, msg))
     end
-    model.options["solution_limit"] = value
+    return model.options["solution_limit"] = value
 end
 
 function MOI.supports(model::Optimizer, attr::MOI.RawOptimizerAttribute)
