@@ -1044,6 +1044,7 @@ function test_moi_support_solution_limit()
     solver = MiniZinc.Optimizer{Int}("chuffed")
     MOI.supports(solver, MOI.SolutionLimit())
     @test MOI.get(solver, MOI.SolutionLimit()) == 1
+    return
 end
 
 function test_moi_var_domain_infeasible_fzn()
