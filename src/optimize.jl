@@ -122,18 +122,6 @@ function MOI.empty!(model::Optimizer{T}) where {T}
     return
 end
 
-MOI.supports(::Optimizer, ::MOI.SolutionLimit) = true
-MOI.get(model::Optimizer, ::MOI.SolutionLimit) = model.options["num_solutions"]
-
-function MOI.set(model::Optimizer, attr::MOI.SolutionLimit, value)
-    if !(value isa Int && value >= 1)
-        msg = "[MiniZinc] SolutionLimit must be an `Int` that is >= 1"
-        throw(MOI.SetAttributeNotAllowed(attr, msg))
-    end
-    model.options["num_solutions"] = value
-    return
-end
-
 function MOI.supports(model::Optimizer, attr::MOI.RawOptimizerAttribute)
     return haskey(model.options, attr.name)
 end
@@ -148,6 +136,17 @@ function MOI.set(model::Optimizer, attr::MOI.RawOptimizerAttribute, value)
         throw(MOI.SetAttributeNotAllowed(attr, msg))
     end
     model.options[attr.name] = value
+    return
+end
+
+MOI.supports(::Optimizer, ::MOI.SolutionLimit) = true
+
+function MOI.get(model::Optimizer, ::MOI.SolutionLimit)
+    return MOI.get(model, MOI.RawOptimizerAttribute("num_solutions"))
+end
+
+function MOI.set(model::Optimizer, ::MOI.SolutionLimit, value)
+    MOI.set(model, MOI.RawOptimizerAttribute("num_solutions"), value)
     return
 end
 
