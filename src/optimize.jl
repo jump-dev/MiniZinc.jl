@@ -189,7 +189,6 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     empty!(dest.primal_solutions)
     index_map = MOI.copy_to(dest.inner, src)
     ret = _run_minizinc(dest)
-    @info "[MiniZinc] Completed." 
     if !isempty(ret)
         m_stat = match(r"=====(.+)=====", ret)
         if m_stat !== nothing
