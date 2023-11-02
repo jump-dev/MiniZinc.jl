@@ -45,14 +45,14 @@ end
 
 function test_nqueens_solve_num_solutions_100()
     model, q = _init_nqueens_solve_num_solutions()
-    MOI.set(model, MOI.RawOptimizerAttribute("num_solutions"), 100)
+    MOI.set(model, MOI.SolutionLimit(), 100)
     _test_nqueens_solve_num_solutions(model, q)
     return
 end
 
 function test_nqueens_solve_num_solutions_25()
     model, q = _init_nqueens_solve_num_solutions()
-    MOI.set(model, MOI.RawOptimizerAttribute("num_solutions"), 25)
+    MOI.set(model, MOI.SolutionLimit(), 25)
     _test_nqueens_solve_num_solutions(model, q, 25, MOI.SOLUTION_LIMIT)
     return
 end
@@ -65,7 +65,7 @@ end
 
 function test_nqueens_solve_num_solutions_1()
     model, q = _init_nqueens_solve_num_solutions()
-    MOI.set(model, MOI.RawOptimizerAttribute("num_solutions"), 1)
+    MOI.set(model, MOI.SolutionLimit(), 1)
     _test_nqueens_solve_num_solutions(model, q, 1)
     return
 end
@@ -75,7 +75,7 @@ function test_nqueens_num_solutions_throw()
     for value in (-1, 0, 1.1, "two")
         @test_throws(
             MOI.SetAttributeNotAllowed,
-            MOI.set(model, MOI.RawOptimizerAttribute("num_solutions"), value),
+            MOI.set(model, MOI.SolutionLimit(), value)
         )
     end
     return

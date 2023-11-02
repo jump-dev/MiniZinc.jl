@@ -34,7 +34,7 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
             solver = Chuffed()
         end
         primal_solutions = Dict{MOI.VariableIndex,T}[]
-        options = Dict{String,Any}("model_filename" => "", "num_solutions" => 1)
+        options = Dict{String,Any}("model_filename" => "", "solution_limit" => 1)
         return new(
             solver,
             Model{T}(),
@@ -83,9 +83,10 @@ function _run_minizinc(dest::Optimizer)
             limit = round(Int, 1_000 * dest.time_limit_sec::Float64)
             cmd = `$cmd --time-limit $limit`
         end
-        if dest.options["num_solutions"] > 1
-            cmd = `$cmd --num-solutions $(dest.options["num_solutions"])`
+        if dest.options["solution_limit"] > 1
+           cmd = `$cmd --num-solutions $(dest.options["solution_limit"])`
         end
+        @info "[MiniZinc] Cmd = $cmd"
         return run(pipeline(cmd, stdout = _stdout))
     end
     if isfile(output)
@@ -122,6 +123,17 @@ function MOI.empty!(model::Optimizer{T}) where {T}
     return
 end
 
+MOI.supports(::Optimizer, ::MOI.SolutionLimit) = true
+MOI.get(model::Optimizer, ::MOI.SolutionLimit) = model.options["solution_limit"]
+
+function MOI.set(model::Optimizer, attr::MOI.SolutionLimit, value)
+    if !(value isa Int && value >= 1)
+        msg = "[MiniZinc] SolutionLimit must be an `Int` that is >= 1"
+        throw(MOI.SetAttributeNotAllowed(attr, msg))
+    end
+    model.options["solution_limit"] = value
+end
+
 function MOI.supports(model::Optimizer, attr::MOI.RawOptimizerAttribute)
     return haskey(model.options, attr.name)
 end
@@ -131,10 +143,6 @@ function MOI.get(model::Optimizer, attr::MOI.RawOptimizerAttribute)
 end
 
 function MOI.set(model::Optimizer, attr::MOI.RawOptimizerAttribute, value)
-    if attr.name == "num_solutions" && !(value isa Int && value >= 1)
-        msg = "value must be an `Int` that is >= 1"
-        throw(MOI.SetAttributeNotAllowed(attr, msg))
-    end
     model.options[attr.name] = value
     return
 end
@@ -181,6 +189,7 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     empty!(dest.primal_solutions)
     index_map = MOI.copy_to(dest.inner, src)
     ret = _run_minizinc(dest)
+    @info "[MiniZinc] Completed." 
     if !isempty(ret)
         m_stat = match(r"=====(.+)=====", ret)
         if m_stat !== nothing
@@ -231,7 +240,7 @@ function MOI.get(model::Optimizer, ::MOI.TerminationStatus)
     if model.solver_status == "UNSATISFIABLE"
         return MOI.INFEASIBLE
     elseif _has_solution(model)
-        if 1 < model.options["num_solutions"] <= length(model.primal_solutions)
+        if 1 < model.options["solution_limit"] <= length(model.primal_solutions)
             return MOI.SOLUTION_LIMIT
         else
             return MOI.OPTIMAL
