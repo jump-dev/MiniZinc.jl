@@ -87,7 +87,6 @@ function _run_minizinc(dest::Optimizer)
         if dest.options["solution_limit"] > 1
             cmd = `$cmd --num-solutions $(dest.options["solution_limit"])`
         end
-        @info "[MiniZinc] Cmd = $cmd"
         return run(pipeline(cmd, stdout = _stdout))
     end
     if isfile(output)
