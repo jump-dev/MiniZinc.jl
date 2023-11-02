@@ -1035,10 +1035,15 @@ function test_moi_basic_fzn()
     index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1
-    @test MOI.get(solver, MOI.SolutionLimit()) == 1
     @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) in [1, 2, 3]
     @test MOI.get(solver, MOI.RawStatusString()) == "SATISFIABLE"
     return
+end
+
+function test_moi_support_solution_limit()
+    solver = MiniZinc.Optimizer{Int}("chuffed")
+    MOI.supports(solver, MOI.SolutionLimit()) 
+    @test MOI.get(solver, MOI.SolutionLimit()) == 1
 end
 
 function test_moi_var_domain_infeasible_fzn()
