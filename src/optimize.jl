@@ -132,7 +132,8 @@ function MOI.set(model::Optimizer, attr::MOI.SolutionLimit, value)
         msg = "[MiniZinc] SolutionLimit must be an `Int` that is >= 1"
         throw(MOI.SetAttributeNotAllowed(attr, msg))
     end
-    return model.options["solution_limit"] = value
+    model.options["solution_limit"] = value
+    return
 end
 
 function MOI.supports(model::Optimizer, attr::MOI.RawOptimizerAttribute)
