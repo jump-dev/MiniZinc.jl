@@ -1,7 +1,7 @@
 name = "MiniZinc"
 uuid = "a7f392d2-6c35-496e-b8cc-0974fbfcbf91"
 authors = ["odow <o.dowson@gmail.com>"]
-version = "0.3.4"
+version = "0.3.5"
 
 [deps]
 Chuffed_jll = "77125aae-c893-5498-99e3-e30470bfa328"
