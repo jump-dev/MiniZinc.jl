@@ -1040,6 +1040,25 @@ function test_moi_basic_fzn()
     return
 end
 
+function test_moi_support_solution_limit()
+    solver = MiniZinc.Optimizer{Int}("chuffed")
+    MOI.supports(solver, MOI.SolutionLimit())
+    attr = MOI.RawOptimizerAttribute("num_solutions")
+    MOI.supports(solver, attr)
+
+    @test MOI.get(solver, MOI.SolutionLimit()) == 1
+    @test MOI.get(solver, attr) == 1
+
+    MOI.set(solver, MOI.SolutionLimit(), 100)
+    @test MOI.get(solver, attr) == 100
+    @test MOI.get(solver, MOI.SolutionLimit()) == 100
+
+    MOI.set(solver, attr, 100)
+    @test MOI.get(solver, attr) == 100
+    @test MOI.get(solver, MOI.SolutionLimit()) == 100
+    return
+end
+
 function test_moi_var_domain_infeasible_fzn()
     model = MOI.Utilities.Model{Int}()
     x, x_int = MOI.add_constrained_variable(model, MOI.Integer())

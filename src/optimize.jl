@@ -139,6 +139,17 @@ function MOI.set(model::Optimizer, attr::MOI.RawOptimizerAttribute, value)
     return
 end
 
+MOI.supports(::Optimizer, ::MOI.SolutionLimit) = true
+
+function MOI.get(model::Optimizer, ::MOI.SolutionLimit)
+    return MOI.get(model, MOI.RawOptimizerAttribute("num_solutions"))
+end
+
+function MOI.set(model::Optimizer, ::MOI.SolutionLimit, value)
+    MOI.set(model, MOI.RawOptimizerAttribute("num_solutions"), value)
+    return
+end
+
 MOI.supports(::Optimizer, ::MOI.TimeLimitSec) = true
 
 MOI.get(model::Optimizer, ::MOI.TimeLimitSec) = model.time_limit_sec
