@@ -56,14 +56,8 @@ function _minizinc_exe(f::F) where {F}
         else
             return f(joinpath(user_dir, "minizinc"))
         end
-    elseif Sys.islinux() || Sys.isapple()
-        return MiniZinc_jll.minizinc(f)
     end
-    return error(
-        "Unable to call libminizinc. Please manually install a copy and set " *
-        "the `JULIA_LIBMINIZINC_DIR` environment variable. See the README.md " *
-        "for more details",
-    )
+    return MiniZinc_jll.minizinc(f)
 end
 
 function _run_minizinc(dest::Optimizer)
