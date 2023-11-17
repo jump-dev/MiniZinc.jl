@@ -1467,6 +1467,14 @@ function test_version_number()
     return
 end
 
+function test_run_failure()
+    model = MiniZinc.Optimizer{Float64}("a")
+    MOI.optimize!(model, MOI.Utilities.Model{Float64}())
+    @test MOI.get(model, MOI.TerminationStatus()) == MOI.OTHER_ERROR
+    @test occursin("=ERROR=", MOI.get(model, MOI.RawStatusString()))
+    return
+end
+
 end
 
 TestMiniZinc.runtests()

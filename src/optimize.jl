@@ -77,16 +77,25 @@ function _run_minizinc(dest::Optimizer)
     end
     output = joinpath(dir, "model.ozn")
     _stdout = joinpath(dir, "_stdout.txt")
-    _minizinc_exe() do exe
-        cmd = `$(exe) --solver $(dest.solver) --output-objective -o $(output) $(filename)`
-        if dest.time_limit_sec !== nothing
-            limit = round(Int, 1_000 * dest.time_limit_sec::Float64)
-            cmd = `$cmd --time-limit $limit`
+    _stderr = joinpath(dir, "_stderr.txt")
+    try
+        _minizinc_exe() do exe
+            cmd = `$(exe) --solver $(dest.solver) --output-objective -o $(output) $(filename)`
+            if dest.time_limit_sec !== nothing
+                limit = round(Int, 1_000 * dest.time_limit_sec::Float64)
+                cmd = `$cmd --time-limit $limit`
+            end
+            if dest.options["num_solutions"] > 1
+                cmd = `$cmd --num-solutions $(dest.options["num_solutions"])`
+            end
+            return run(pipeline(cmd, stdout = _stdout, stderr = _stderr))
         end
-        if dest.options["num_solutions"] > 1
-            cmd = `$cmd --num-solutions $(dest.options["num_solutions"])`
+    catch
+        status = "=====ERROR=====\n"
+        if isfile(_stderr)
+            status *= read(_stderr, String)
         end
-        return run(pipeline(cmd, stdout = _stdout))
+        return status
     end
     if isfile(output)
         return read(output, String)
@@ -196,7 +205,7 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
         m_stat = match(r"=====(.+)=====", ret)
         if m_stat !== nothing
             @assert length(m_stat.captures) == 1
-            dest.solver_status = m_stat[1]
+            dest.solver_status = occursin("ERROR", ret) ? ret : m_stat[1]
         else
             dest.solver_status = "SATISFIABLE"
             variable_map = Dict(
