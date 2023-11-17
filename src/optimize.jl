@@ -205,9 +205,9 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
         m_stat = match(r"=====(.+)=====", ret)
         if m_stat !== nothing
             @assert length(m_stat.captures) == 1
-            dest.solver_status = ret
+            dest.solver_status = occursin("ERROR", ret) ? ret : m_stat[1]
         else
-            dest.solver_status = "=====SATISFIABLE====="
+            dest.solver_status = "SATISFIABLE"
             variable_map = Dict(
                 MOI.get(dest.inner, MOI.VariableName(), x) => x for
                 x in MOI.get(src, MOI.ListOfVariableIndices())
@@ -241,14 +241,14 @@ function MOI.is_valid(model::Optimizer, x::MOI.VariableIndex)
 end
 
 function _has_solution(model::Optimizer)
-    return model.solver_status == "=====SATISFIABLE=====" &&
+    return model.solver_status == "SATISFIABLE" &&
            !isempty(model.primal_solutions)
 end
 
 MOI.get(model::Optimizer, ::MOI.RawStatusString) = model.solver_status
 
 function MOI.get(model::Optimizer, ::MOI.TerminationStatus)
-    if occursin("=UNSATISFIABLE=", model.solver_status)
+    if model.solver_status == "UNSATISFIABLE"
         return MOI.INFEASIBLE
     elseif _has_solution(model)
         if 1 < model.options["num_solutions"] <= length(model.primal_solutions)
@@ -256,7 +256,7 @@ function MOI.get(model::Optimizer, ::MOI.TerminationStatus)
         else
             return MOI.OPTIMAL
         end
-    elseif occursin("UNKNONWN", model.solver_status) &&
+    elseif model.solver_status == "UNKNOWN" &&
            model.time_limit_sec !== nothing &&
            model.solve_time_sec >= model.time_limit_sec
         return MOI.TIME_LIMIT   # The solver timed out
