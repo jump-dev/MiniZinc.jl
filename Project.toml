@@ -1,7 +1,7 @@
 name = "MiniZinc"
 uuid = "a7f392d2-6c35-496e-b8cc-0974fbfcbf91"
 authors = ["odow <o.dowson@gmail.com>"]
-version = "0.3.5"
+version = "0.3.6"
 
 [deps]
 Chuffed_jll = "77125aae-c893-5498-99e3-e30470bfa328"
@@ -12,6 +12,7 @@ MiniZinc_jll = "3677d96b-3d39-5184-a844-8e8b2839af35"
 Chuffed_jll = "=0.10.4"
 MathOptInterface = "1.21"
 MiniZinc_jll = "=2.7.6"
+Test = "<0.0.1, 1.6"
 julia = "1.6"
 
 [extras]
