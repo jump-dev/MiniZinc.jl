@@ -392,9 +392,9 @@ function _write_constraint(
     io::IO,
     ::Set,
     variables::Dict,
-    f::Union{MOI.ScalarAffineFunction{T},MOI.ScalarQuadraticFunction{T}},
-    s::Union{MOI.LessThan{T},MOI.GreaterThan{T},MOI.EqualTo{T}},
-) where {T}
+    f::Union{MOI.ScalarAffineFunction,MOI.ScalarQuadraticFunction},
+    s::Union{MOI.LessThan,MOI.GreaterThan,MOI.EqualTo},
+)
     print(io, "constraint ", _to_string(variables, f))
     println(io, _sense(s), _rhs(s) - f.constant, ";")
     return
@@ -411,9 +411,9 @@ function _write_constraint(
     io::IO,
     ::Set,
     variables::Dict,
-    f::MOI.VectorAffineFunction{T},
-    s::MOI.Reified{S2},
-) where {T,S2<:Union{MOI.LessThan{T},MOI.GreaterThan{T},MOI.EqualTo{T}}}
+    f::MOI.VectorAffineFunction,
+    s::MOI.Reified{<:Union{MOI.LessThan,MOI.GreaterThan,MOI.EqualTo}},
+)
     z, x = _to_epigraph(variables, f)
     fx = string(x, _sense(s.set), _rhs(s.set) - f.constants[2])
     println(io, "constraint $z <-> $fx;")
@@ -425,8 +425,8 @@ function _write_constraint(
     predicates::Set,
     variables::Dict,
     f::MOI.ScalarNonlinearFunction,
-    s::Union{MOI.LessThan{T},MOI.GreaterThan{T},MOI.EqualTo{T}},
-) where {T}
+    s::Union{MOI.LessThan,MOI.GreaterThan,MOI.EqualTo},
+)
     print(io, "constraint ")
     _write_expression(io, predicates, variables, f)
     println(io, _sense(s), _rhs(s), ";")

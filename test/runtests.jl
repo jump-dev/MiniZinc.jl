@@ -969,6 +969,42 @@ function test_write_circuit()
     return
 end
 
+function test_write_bool_true()
+    model = MiniZinc.Model{Bool}()
+    x = MOI.add_variables(model, 2)
+    MOI.set(model, MOI.VariableName(), x, ["x1", "x2"])
+    MOI.add_constraint(
+        model,
+        MOI.ScalarNonlinearFunction(:||, Any[x[1], x[2]]),
+        MOI.EqualTo{Bool}(true),
+    )
+    @test sprint(write, model) == """
+    var bool: x1;
+    var bool: x2;
+    constraint (x1 \\/ x2) = true;
+    solve satisfy;
+    """
+    return
+end
+
+function test_write_bool_false()
+    model = MiniZinc.Model{Bool}()
+    x = MOI.add_variables(model, 2)
+    MOI.set(model, MOI.VariableName(), x, ["x1", "x2"])
+    MOI.add_constraint(
+        model,
+        MOI.ScalarNonlinearFunction(:&&, Any[x[1], x[2]]),
+        MOI.EqualTo{Bool}(false),
+    )
+    @test sprint(write, model) == """
+    var bool: x1;
+    var bool: x2;
+    constraint (x1 /\\ x2) = false;
+    solve satisfy;
+    """
+    return
+end
+
 function _test_chuffed_asset(file, args...)
     filename = joinpath(@__DIR__, "assets", file)
     ret = MiniZinc.run_flatzinc(Chuffed_jll.fznchuffed, filename, args...)
