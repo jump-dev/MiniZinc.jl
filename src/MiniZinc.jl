@@ -17,7 +17,7 @@ const ReifiedTable{T} = MOI.Reified{MOI.Table{T}}
 
 MOI.Utilities.@model(
     Model,
-    (MOI.ZeroOne, MOI.Integer),
+    (MOI.ZeroOne, MOI.Integer, MOI.EqualTo{Bool}),
     (MOI.EqualTo, MOI.GreaterThan, MOI.LessThan, MOI.Interval),
     (
         MOI.AllDifferent,
