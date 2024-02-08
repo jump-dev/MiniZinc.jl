@@ -1081,17 +1081,21 @@ function test_moi_support_solution_limit()
     MOI.supports(solver, MOI.SolutionLimit())
     attr = MOI.RawOptimizerAttribute("num_solutions")
     MOI.supports(solver, attr)
-
-    @test MOI.get(solver, MOI.SolutionLimit()) == 1
-    @test MOI.get(solver, attr) == 1
-
+    @test MOI.get(solver, MOI.SolutionLimit()) === nothing
+    @test MOI.get(solver, attr) === nothing
     MOI.set(solver, MOI.SolutionLimit(), 100)
     @test MOI.get(solver, attr) == 100
     @test MOI.get(solver, MOI.SolutionLimit()) == 100
-
     MOI.set(solver, attr, 100)
     @test MOI.get(solver, attr) == 100
     @test MOI.get(solver, MOI.SolutionLimit()) == 100
+    MOI.set(solver, MOI.SolutionLimit(), nothing)
+    @test_throws(
+        MOI.SetAttributeNotAllowed,
+        MOI.set(solver, MOI.SolutionLimit(), -1),
+    )
+    @test MOI.get(solver, MOI.SolutionLimit()) === nothing
+    @test MOI.get(solver, attr) === nothing
     return
 end
 
