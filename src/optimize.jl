@@ -159,7 +159,7 @@ end
 
 function MOI.set(
     model::Optimizer,
-    ::MOI.SolutionLimit,
+    attr::MOI.SolutionLimit,
     value::Union{Nothing,Integer},
 )
     if value isa Integer && value < 1
