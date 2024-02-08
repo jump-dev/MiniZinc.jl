@@ -34,7 +34,8 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
             solver = Chuffed()
         end
         primal_solutions = Dict{MOI.VariableIndex,T}[]
-        options = Dict{String,Any}("model_filename" => "", "num_solutions" => 1)
+        options =
+            Dict{String,Any}("model_filename" => "", "num_solutions" => nothing)
         return new(
             solver,
             Model{T}(),
@@ -85,7 +86,7 @@ function _run_minizinc(dest::Optimizer)
                 limit = round(Int, 1_000 * dest.time_limit_sec::Float64)
                 cmd = `$cmd --time-limit $limit`
             end
-            if dest.options["num_solutions"] > 1
+            if dest.options["num_solutions"] !== nothing
                 cmd = `$cmd --num-solutions $(dest.options["num_solutions"])`
             end
             return run(pipeline(cmd, stdout = _stdout, stderr = _stderr))
@@ -140,9 +141,9 @@ function MOI.get(model::Optimizer, attr::MOI.RawOptimizerAttribute)
 end
 
 function MOI.set(model::Optimizer, attr::MOI.RawOptimizerAttribute, value)
-    if attr.name == "num_solutions" && !(value isa Int && value >= 1)
-        msg = "value must be an `Int` that is >= 1"
-        throw(MOI.SetAttributeNotAllowed(attr, msg))
+    if attr.name == "num_solutions"
+        MOI.set(model, MOI.SolutionLimit(), value)
+        return
     end
     model.options[attr.name] = value
     return
@@ -154,8 +155,16 @@ function MOI.get(model::Optimizer, ::MOI.SolutionLimit)
     return MOI.get(model, MOI.RawOptimizerAttribute("num_solutions"))
 end
 
-function MOI.set(model::Optimizer, ::MOI.SolutionLimit, value)
-    MOI.set(model, MOI.RawOptimizerAttribute("num_solutions"), value)
+function MOI.set(
+    model::Optimizer,
+    attr::MOI.SolutionLimit,
+    value::Union{Nothing,Integer},
+)
+    if value isa Integer && value < 1
+        msg = "value must be an `Int` that is >= 1"
+        throw(MOI.SetAttributeNotAllowed(attr, msg))
+    end
+    model.options["num_solutions"] = value
     return
 end
 
@@ -251,11 +260,11 @@ function MOI.get(model::Optimizer, ::MOI.TerminationStatus)
     if model.solver_status == "UNSATISFIABLE"
         return MOI.INFEASIBLE
     elseif _has_solution(model)
-        if 1 < model.options["num_solutions"] <= length(model.primal_solutions)
+        num_solutions = something(model.options["num_solutions"], 0)
+        if 1 <= num_solutions <= length(model.primal_solutions)
             return MOI.SOLUTION_LIMIT
-        else
-            return MOI.OPTIMAL
         end
+        return MOI.OPTIMAL
     elseif model.solver_status == "UNKNOWN" &&
            model.time_limit_sec !== nothing &&
            model.solve_time_sec >= model.time_limit_sec

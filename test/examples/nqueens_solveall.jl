@@ -66,7 +66,7 @@ end
 function test_nqueens_solve_num_solutions_1()
     model, q = _init_nqueens_solve_num_solutions()
     MOI.set(model, MOI.SolutionLimit(), 1)
-    _test_nqueens_solve_num_solutions(model, q, 1)
+    _test_nqueens_solve_num_solutions(model, q, 1, MOI.SOLUTION_LIMIT)
     return
 end
 
