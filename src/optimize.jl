@@ -7,9 +7,7 @@ Chuffed() = joinpath(Chuffed_jll.artifact_dir, "chuffed.msc")
 
 function run_flatzinc(solver_cmd::F, filename, args = String[]) where {F}
     try
-        solver_cmd() do exe
-            return String(read(`$exe $(vcat(args, filename))`))
-        end
+        return String(read(`$(solver_cmd()) $(vcat(args, filename))`))
     catch
         return ""
     end
@@ -58,7 +56,7 @@ function _minizinc_exe(f::F) where {F}
             return f(joinpath(user_dir, "minizinc"))
         end
     elseif Sys.islinux() || Sys.isapple()
-        return MiniZinc_jll.minizinc(f)
+        return f(MiniZinc_jll.minizinc())
     end
     return error(
         "Unable to call libminizinc. Please manually install a copy and set " *
