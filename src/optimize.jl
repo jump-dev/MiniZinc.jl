@@ -34,10 +34,8 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
             solver = Chuffed()
         end
         primal_solutions = Dict{MOI.VariableIndex,T}[]
-        options = Dict{String,Any}(
-            "model_filename" => "",
-            "num_solutions" => nothing,
-        )
+        options =
+            Dict{String,Any}("model_filename" => "", "num_solutions" => nothing)
         return new(
             solver,
             Model{T}(),
