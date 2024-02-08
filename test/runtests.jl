@@ -187,18 +187,6 @@ function test_write_float_equalto()
     return
 end
 
-function test_write_int()
-    model = MiniZinc.Model{Int}()
-    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
-    MOI.add_constraint(model, x, MOI.GreaterThan(1))
-    MOI.add_constraint(model, x, MOI.LessThan(3))
-    @test sprint(write, model) == """
-    var 1 .. 3: x1;
-    solve satisfy;
-    """
-    return
-end
-
 function test_write_linear_eq()
     model = MiniZinc.Model{Int}()
     x, _ = MOI.add_constrained_variable(model, MOI.Integer())
@@ -969,7 +957,7 @@ function test_write_circuit()
     return
 end
 
-function test_write_bool_true()
+function test_write_bool_or_true()
     model = MiniZinc.Model{Bool}()
     x = MOI.add_variables(model, 2)
     MOI.set(model, MOI.VariableName(), x, ["x1", "x2"])
@@ -987,7 +975,7 @@ function test_write_bool_true()
     return
 end
 
-function test_write_bool_false()
+function test_write_bool_and_false()
     model = MiniZinc.Model{Bool}()
     x = MOI.add_variables(model, 2)
     MOI.set(model, MOI.VariableName(), x, ["x1", "x2"])
@@ -1422,7 +1410,7 @@ function test_model_solver_name()
     return
 end
 
-function test_write_bool()
+function test_supports_vector_objective()
     model = MiniZinc.Model{Int}()
     @test !MOI.supports(model, MOI.ObjectiveFunction{MOI.VectorOfVariables}())
     return
