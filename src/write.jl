@@ -35,7 +35,12 @@ function _variable_info(model::Model{T}, x) where {T}
         lb, ub = set.lower, set.upper
     end
     if is_bool || is_int
-        lb, ub = ceil(Int, lb), floor(Int, ub)
+        if isfinite(lb) && !isinteger(lb)
+            lb = ceil(Int, lb)
+        end
+        if isfinite(ub) && !isinteger(ub)
+            ub = floor(Int, ub)
+        end
     end
     return (name = name, lb = lb, ub = ub, is_int = is_int, is_bool = is_bool)
 end
