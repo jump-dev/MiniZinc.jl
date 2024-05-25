@@ -1503,6 +1503,39 @@ function test_run_failure()
     return
 end
 
+function test_highs_free_binary()
+    model = MOI.Utilities.Model{Float64}()
+    x, _ = MOI.add_constrained_variable(model, MOI.ZeroOne())
+    solver = MiniZinc.Optimizer{Float64}("highs")
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.OPTIMAL
+    return
+end
+
+function test_highs_int_frac_lb()
+    model = MOI.Utilities.Model{Float64}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.add_constraint(model, x, MOI.GreaterThan(0.5))
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+    MOI.set(model, MOI.ObjectiveFunction{typeof(x)}(), x)
+    solver = MiniZinc.Optimizer{Float64}("highs")
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) ≈ 1.0
+    return
+end
+
+function test_highs_int_frac_ub()
+    model = MOI.Utilities.Model{Float64}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.add_constraint(model, x, MOI.LessThan(2.5))
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    MOI.set(model, MOI.ObjectiveFunction{typeof(x)}(), x)
+    solver = MiniZinc.Optimizer{Float64}("highs")
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) ≈ 2.0
+    return
+end
+
 end
 
 TestMiniZinc.runtests()
