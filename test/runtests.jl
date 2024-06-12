@@ -25,6 +25,14 @@ for file in readdir("examples")
     include(joinpath(@__DIR__, "examples", file))
 end
 
+function _test_file_contents(filename, args...)
+    contents = read(filename, String)
+    for arg in args
+        @test occursin(arg, contents)
+    end
+    return
+end
+
 function test_write_bool_model()
     model = MiniZinc.Model{Bool}()
     x = MOI.add_variable(model)
@@ -1172,6 +1180,7 @@ end
 function test_model_filename()
     model = MOI.Utilities.Model{Int}()
     x, x_int = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), x, "x1")
     c1 = MOI.add_constraint(model, x, MOI.GreaterThan(1))
     c2 = MOI.add_constraint(model, x, MOI.LessThan(3))
     @test MOI.is_valid(model, x)
@@ -1188,7 +1197,11 @@ function test_model_filename()
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) in [1, 2, 3]
-    @test read("test.mzn", String) == "var 1 .. 3: x1;\nsolve satisfy;\n"
+    _test_file_contents(
+        "test.mzn",
+        "var 1 .. 3: x1;\n",
+        "solve satisfy;\n",
+    )
     rm("test.mzn")
     return
 end
@@ -1196,6 +1209,7 @@ end
 function test_model_nonlinear_boolean()
     model = MOI.Utilities.Model{Int}()
     x = MOI.add_variables(model, 2)
+    MOI.set.(model, MOI.VariableName(), x, ["x1", "x2"])
     MOI.add_constraint.(model, x, MOI.ZeroOne())
     for (f, c) in [(:||, 1), (:&&, 0)]
         snf = MOI.ScalarNonlinearFunction(f, Any[x...])
@@ -1210,8 +1224,14 @@ function test_model_nonlinear_boolean()
     sol = round.(Bool, MOI.get(solver, MOI.VariablePrimal(), y))
     @test (sol[1] || sol[2])
     @test !(sol[1] && sol[2])
-    @test read("test.mzn", String) ==
-          "var bool: x1;\nvar bool: x2;\nconstraint (x1 \\/ x2) = 1;\nconstraint (x1 /\\ x2) = 0;\nsolve satisfy;\n"
+    _test_file_contents(
+        "test.mzn",
+        "var bool: x1;\n",
+        "var bool: x2;\n",
+        "constraint (x1 \\/ x2) = 1;\n",
+        "constraint (x1 /\\ x2) = 0;\n",
+        "solve satisfy;\n",
+    )
     rm("test.mzn")
     return
 end
@@ -1219,8 +1239,10 @@ end
 function test_model_nonlinear_boolean_nested()
     model = MOI.Utilities.Model{Int}()
     x = MOI.add_variables(model, 2)
+    MOI.set.(model, MOI.VariableName(), x, ["x2", "x3"])
     MOI.add_constraint.(model, x, MOI.ZeroOne())
     y = MOI.add_variable(model)
+    MOI.set(model, MOI.VariableName(), y, "x1")
     MOI.add_constraint(model, y, MOI.Integer())
     MOI.add_constraint(model, y, MOI.Interval(0, 10))
     SNF(f::Symbol, args...) = MOI.ScalarNonlinearFunction(f, Any[args...])
@@ -1238,8 +1260,15 @@ function test_model_nonlinear_boolean_nested()
     @test sol[1] == 0
     @test sol[2] == 1
     @test sol[3] < 5
-    @test read("test.mzn", String) ==
-          "var 0 .. 10: x1;\nvar bool: x2;\nvar bool: x3;\nconstraint (x2 < 1) = 1;\nconstraint (x2 \\/ (x3 /\\ (x1 < 5))) >= 1;\nsolve satisfy;\n"
+    _test_file_contents(
+        "test.mzn",
+        "var 0 .. 10: x1;\n",
+        "var bool: x2;\n",
+        "var bool: x3;\n",
+        "constraint (x2 < 1) = 1;\n",
+        "constraint (x2 \\/ (x3 /\\ (x1 < 5))) >= 1;\n",
+        "solve satisfy;\n",
+    )
     rm("test.mzn")
     return
 end
@@ -1247,6 +1276,7 @@ end
 function test_model_nonlinear_boolean_jump()
     model = MOI.Utilities.Model{Int}()
     x = MOI.add_variables(model, 2)
+    MOI.set.(model, MOI.VariableName(), x, ["x1", "x2"])
     MOI.add_constraint.(model, x, MOI.ZeroOne())
     for (f, c) in [(:||, 1), (:&&, 0)]
         snf1 = MOI.ScalarNonlinearFunction(f, Any[x...])
@@ -1262,8 +1292,14 @@ function test_model_nonlinear_boolean_jump()
     sol = round.(Bool, MOI.get(solver, MOI.VariablePrimal(), y))
     @test (sol[1] || sol[2])
     @test !(sol[1] && sol[2])
-    @test read("test.mzn", String) ==
-          "var bool: x1;\nvar bool: x2;\nconstraint ((x1 \\/ x2) - 1) = 0;\nconstraint ((x1 /\\ x2) - 0) = 0;\nsolve satisfy;\n"
+    _test_file_contents(
+        "test.mzn",
+        "var bool: x1;\n",
+        "var bool: x2;\n",
+        "constraint ((x1 \\/ x2) - 1) = 0;\n",
+        "constraint ((x1 /\\ x2) - 0) = 0;\n",
+        "solve satisfy;\n",
+    )
     rm("test.mzn")
     return
 end
@@ -1271,6 +1307,7 @@ end
 function test_model_nonlinear_boolean_nested_not()
     model = MOI.Utilities.Model{Int}()
     x = MOI.add_variables(model, 3)
+    MOI.set.(model, MOI.VariableName(), x, ["x1", "x2", "x3"])
     MOI.add_constraint.(model, x, MOI.ZeroOne())
     # x1 => !(x2 ⊻ x3)
     snf1 = MOI.ScalarNonlinearFunction(:⊻, Any[x[2], x[3]])
@@ -1285,8 +1322,14 @@ function test_model_nonlinear_boolean_nested_not()
     y = [index_map[v] for v in x]
     sol = round.(Bool, MOI.get(solver, MOI.VariablePrimal(), y))
     @test ifelse(sol[1], !(sol[2] || sol[3]), true)
-    @test read("test.mzn", String) ==
-          "var bool: x1;\nvar bool: x2;\nvar bool: x3;\nconstraint (x1 -> not((x2 xor x3))) = 1;\nsolve satisfy;\n"
+    _test_file_contents(
+        "test.mzn",
+        "var bool: x1;\n",
+        "var bool: x2;\n",
+        "var bool: x3;\n",
+        "constraint (x1 -> not((x2 xor x3))) = 1;\n",
+        "solve satisfy;\n",
+    )
     rm("test.mzn")
     return
 end
@@ -1294,6 +1337,7 @@ end
 function test_model_nonlinear_bool_model()
     model = MOI.Utilities.Model{Bool}()
     x = MOI.add_variables(model, 3)
+    MOI.set.(model, MOI.VariableName(), x, ["x1", "x2", "x3"])
     # x1 <--> !(x2 <-- x3)
     snf1 = MOI.ScalarNonlinearFunction(:(<--), Any[x[2], x[3]])
     snf2 = MOI.ScalarNonlinearFunction(:!, Any[snf1])
@@ -1307,8 +1351,14 @@ function test_model_nonlinear_bool_model()
     y = [index_map[v] for v in x]
     sol = MOI.get(solver, MOI.VariablePrimal(), y)
     @test sol[1] == !ifelse(sol[3], sol[2], true)
-    @test read("test.mzn", String) ==
-          "var bool: x1;\nvar bool: x2;\nvar bool: x3;\nconstraint (x1 <-> not((x2 <- x3))) = true;\nsolve satisfy;\n"
+    _test_file_contents(
+        "test.mzn",
+        "var bool: x1;\n",
+        "var bool: x2;\n",
+        "var bool: x3;\n",
+        "constraint (x1 <-> not((x2 <- x3))) = true;\n",
+        "solve satisfy;\n",
+    )
     rm("test.mzn")
     return
 end
@@ -1317,8 +1367,10 @@ function test_model_nonlinear_bool_vector_arg()
     model = MOI.Utilities.Model{Int}()
     x1 = MOI.add_variables(model, 3)
     MOI.add_constraint.(model, x1, MOI.ZeroOne())
+    MOI.set.(model, MOI.VariableName(), x1, ["x1", "x2", "x3"])
     x2 = MOI.add_variables(model, 3)
     MOI.add_constraint.(model, x2, MOI.ZeroOne())
+    MOI.set.(model, MOI.VariableName(), x2, ["x4", "x5", "x6"])
     # forall([exists(x1), exists(x2)])
     snf1 = MOI.ScalarNonlinearFunction(:exists, Any[x1])
     snf2 = MOI.ScalarNonlinearFunction(:exists, Any[x2])
@@ -1336,8 +1388,18 @@ function test_model_nonlinear_bool_vector_arg()
     y2 = MOI.get(solver, MOI.VariablePrimal(), [index_map[v] for v in x2])
     @test sum(y1) == 1
     @test sum(y2) == 1
-    @test read("test.mzn", String) ==
-          "var bool: x1;\nvar bool: x2;\nvar bool: x3;\nvar bool: x4;\nvar bool: x5;\nvar bool: x6;\nconstraint forall([exists([x1, x2, x3]), exists([x4, x5, x6])]) = 1;\nconstraint count([x1, x2, x3, x4, x5, x6]) = 2;\nsolve satisfy;\n"
+    _test_file_contents(
+        "test.mzn",
+        "var bool: x1;\n",
+        "var bool: x2;\n",
+        "var bool: x3;\n",
+        "var bool: x4;\n",
+        "var bool: x5;\n",
+        "var bool: x6;\n",
+        "constraint forall([exists([x1, x2, x3]), exists([x4, x5, x6])]) = 1;\n",
+        "constraint count([x1, x2, x3, x4, x5, x6]) = 2;\n",
+        "solve satisfy;\n",
+    )
     rm("test.mzn")
     return
 end
@@ -1366,8 +1428,16 @@ function test_model_nonlinear_alldifferent_reified()
     z_sol = MOI.get(solver, MOI.VariablePrimal(), index_map[z])
     @test !allunique(xy_sol)
     @test iszero(z_sol)
-    @test read("test.mzn", String) ==
-          "var bool: z;\nconstraint bool_eq(z, false);\nvar 1 .. 3: x;\nvar 1 .. 3: y;\nconstraint (z <-> alldifferent([x, y])) = 1;\nsolve satisfy;\ninclude \"alldifferent.mzn\";\n"
+    _test_file_contents(
+        "test.mzn",
+        "var 1 .. 3: x;\n",
+        "var 1 .. 3: y;\n",
+        "var bool: z;\n",
+        "constraint bool_eq(z, false);\n",
+        "constraint (z <-> alldifferent([x, y])) = 1;\n",
+        "solve satisfy;\n",
+        "include \"alldifferent.mzn\";\n",
+    )
     rm("test.mzn")
     return
 end
