@@ -1197,11 +1197,7 @@ function test_model_filename()
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) in [1, 2, 3]
-    _test_file_contents(
-        "test.mzn",
-        "var 1 .. 3: x1;\n",
-        "solve satisfy;\n",
-    )
+    _test_file_contents("test.mzn", "var 1 .. 3: x1;\n", "solve satisfy;\n")
     rm("test.mzn")
     return
 end
