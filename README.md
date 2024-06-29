@@ -178,3 +178,6 @@ Set options using [`MOI.RawOptimizerAttribute`](@ref) in MOI or
  * `model_filename::String = ""`: the location at which to write out the `.mzn`
    file during optimization. This option can be helpful during debugging. If
    left empty, a temporary file will be used instead.
+
+ * [`MOI.SolutionLimit`](@ref): set this option to a positive integer to return
+   up to the `limit` number of solutions.
