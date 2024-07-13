@@ -1602,6 +1602,34 @@ function test_highs_int_frac_ub()
     return
 end
 
+function test_infix_unary_minus()
+    model = MOI.Utilities.Model{Float64}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Interval(1.0, 3.0))
+    solver = MiniZinc.Optimizer{Float64}("highs")
+    f = MOI.ScalarNonlinearFunction(:-, Any[x])
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) ≈ 1.0
+    @test MOI.get(solver, MOI.ObjectiveValue()) ≈ -1.0
+    return
+end
+
+function test_infix_unary_addition()
+    for op in (:+, :*)
+        model = MOI.Utilities.Model{Float64}()
+        x, _ = MOI.add_constrained_variable(model, MOI.Interval(1.0, 3.0))
+        solver = MiniZinc.Optimizer{Float64}("highs")
+        f = MOI.ScalarNonlinearFunction(op, Any[x])
+        MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+        MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)
+        index_map, _ = MOI.optimize!(solver, model)
+        @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) ≈ 3.0
+        @test MOI.get(solver, MOI.ObjectiveValue()) ≈ 3.0
+    end
+    return
+end
+
 end
 
 TestMiniZinc.runtests()
