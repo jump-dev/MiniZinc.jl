@@ -447,7 +447,16 @@ function _write_expression(
     if f.head == :ifelse
         _write_ifelse(io, predicates, variables, f.args)
         return
-    elseif haskey(_INFIX_OPS, f.head)
+    elseif f.head in (:+, :*) && length(f.args) == 1
+        _write_expression(io, predicates, variables, f.args[1])
+        return
+    elseif f.head == :- && length(f.args) == 1
+        print(io, "-(")
+        _write_expression(io, predicates, variables, f.args[1])
+        print(io, ")")
+        return
+    end
+    if haskey(_INFIX_OPS, f.head)
         op = _INFIX_OPS[f.head]
         @assert length(f.args) > 1
         sep = string(" ", op, " ")
