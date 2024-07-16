@@ -10,7 +10,6 @@ function Chuffed()
             return file
         end
     end
-    return error("Unable to find chuffed.msc")
 end
 
 function run_flatzinc(solver_cmd::F, filename, args = String[]) where {F}
