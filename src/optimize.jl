@@ -3,14 +3,21 @@
 # Use of this source code is governed by an MIT-style license that can be found
 # in the LICENSE.md file or at https://opensource.org/licenses/MIT.
 
-Chuffed() = joinpath(Chuffed_jll.artifact_dir, "chuffed.msc")
+function Chuffed()
+    for subdir in ["", joinpath("share", "minizinc", "solvers")]
+        file = joinpath(Chuffed_jll.artifact_dir, subdir, "chuffed.msc")
+        if isfile(file)
+            return file
+        end
+    end
+    return error("Unable to find chuffed.msc")
+end
 
 function run_flatzinc(solver_cmd::F, filename, args = String[]) where {F}
-    try
-        return String(read(`$(solver_cmd()) $(vcat(args, filename))`))
-    catch
-        return ""
-    end
+    io = IOBuffer()
+    run(pipeline(`$(solver_cmd()) $(vcat(args, filename))`; stdout = io))
+    seekstart(io)
+    return read(io, String)
 end
 
 """
@@ -91,6 +98,9 @@ function _run_minizinc(dest::Optimizer)
         end
     catch
         status = "=====ERROR=====\n"
+        if isfile(_stdout)
+            status *= read(_stdout, String)
+        end
         if isfile(_stderr)
             status *= read(_stderr, String)
         end

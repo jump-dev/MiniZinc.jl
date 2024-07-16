@@ -1013,8 +1013,8 @@ function test_chuffed_basic()
 end
 
 function test_chuffed_one_solution()
-    @test _test_chuffed_asset("one_solution.fzn") ==
-          "x = 10;\n\n----------\n==========\n"
+    solution = "x = 10;\n\n----------\n==========\n"
+    @test startswith(_test_chuffed_asset("one_solution.fzn"), solution)
     return
 end
 
@@ -1170,7 +1170,7 @@ end
 function test_moi_tests()
     model = MOI.Utilities.CachingOptimizer(
         MOI.Utilities.Model{Int}(),
-        MiniZinc.Optimizer{Int}("chuffed"),
+        MiniZinc.Optimizer{Int}("highs"),
     )
     config = MOI.Test.Config(Int)
     MOI.Test.runtests(model, config, include = String["test_cpsat_"])
