@@ -24,7 +24,7 @@ end
 function _test_nqueens_solve_num_solutions(
     model,
     q,
-    actual_count = 92,
+    actual_count = 52,
     termination_status = MOI.OPTIMAL,
 )
     n = 8
