@@ -1170,7 +1170,7 @@ end
 function test_moi_tests()
     model = MOI.Utilities.CachingOptimizer(
         MOI.Utilities.Model{Int}(),
-        MiniZinc.Optimizer{Int}("highs"),
+        MiniZinc.Optimizer{Int}("chuffed"),
     )
     config = MOI.Test.Config(Int)
     MOI.Test.runtests(model, config, include = String["test_cpsat_"])
