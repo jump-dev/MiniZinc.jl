@@ -60,13 +60,16 @@ function _write_variables(io::IO, model::Model{T}) where {T}
             end
         elseif info.is_int
             if typemin(T) < lb && ub < typemax(T)
+                lb, ub = ceil(Int, lb), floor(Int, ub)
                 println(io, "var $lb .. $ub: $(info.name);")
             else
                 println(io, "var int: $(info.name);")
                 if ub < typemax(T)
+                    ub = floor(Int, ub)
                     println(io, "constraint int_le($(info.name), $ub);")
                 end
                 if typemin(T) < lb
+                    lb = ceil(Int, lb)
                     println(io, "constraint int_le($lb, $(info.name));")
                 end
             end
