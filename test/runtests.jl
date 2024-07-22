@@ -91,6 +91,35 @@ function test_write_int()
     return
 end
 
+function test_write_int_float_interval()
+    model = MiniZinc.Model{Float64}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.add_constraint(model, x, MOI.Interval(1.5, 3.2))
+    @test sprint(write, model) == """
+    var 2 .. 3: x1;
+    solve satisfy;
+    """
+    return
+end
+
+function test_write_int_float_greater_than()
+    model = MiniZinc.Model{Float64}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.add_constraint(model, x, MOI.GreaterThan(1.5))
+    @test sprint(write, model) ==
+          "var int: x1;\nconstraint int_le(2, x1);\nsolve satisfy;\n"
+    return
+end
+
+function test_write_int_float_less_than()
+    model = MiniZinc.Model{Float64}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.add_constraint(model, x, MOI.LessThan(1.5))
+    @test sprint(write, model) ==
+          "var int: x1;\nconstraint int_le(x1, 1);\nsolve satisfy;\n"
+    return
+end
+
 function test_write_interval()
     model = MiniZinc.Model{Int}()
     x, _ = MOI.add_constrained_variable(model, MOI.Integer())
@@ -1627,6 +1656,46 @@ function test_infix_unary_addition()
         @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) ≈ 3.0
         @test MOI.get(solver, MOI.ObjectiveValue()) ≈ 3.0
     end
+    return
+end
+
+function test_integer_bounds_interval()
+    model = MOI.Utilities.Model{Float64}()
+    x = MOI.add_variables(model, 3)
+    MOI.add_constraint.(model, x, MOI.Integer())
+    MOI.add_constraint.(model, x, MOI.Interval(1.0, 3.0))
+    MOI.add_constraint(model, MOI.VectorOfVariables(x), MOI.AllDifferent(3))
+    mzn = MiniZinc.Optimizer{Float64}("highs")
+    index_map, _ = MOI.optimize!(mzn, model)
+    @test MOI.get(mzn, MOI.TerminationStatus()) == MOI.OPTIMAL
+    y = [MOI.get(mzn, MOI.VariablePrimal(), index_map[xi]) for xi in x]
+    @test sort(y) == [1, 2, 3]
+    return
+end
+
+function test_integer_bounds_greater_than()
+    model = MOI.Utilities.Model{Float64}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.add_constraint(model, x, MOI.GreaterThan(1.5))
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+    MOI.set(model, MOI.ObjectiveFunction{MOI.VariableIndex}(), x)
+    mzn = MiniZinc.Optimizer{Float64}("highs")
+    index_map, _ = MOI.optimize!(mzn, model)
+    @test MOI.get(mzn, MOI.TerminationStatus()) == MOI.OPTIMAL
+    @test MOI.get(mzn, MOI.VariablePrimal(), index_map[x]) == 2
+    return
+end
+
+function test_integer_bounds_less_than_than()
+    model = MOI.Utilities.Model{Float64}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.add_constraint(model, x, MOI.LessThan(1.5))
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    MOI.set(model, MOI.ObjectiveFunction{MOI.VariableIndex}(), x)
+    mzn = MiniZinc.Optimizer{Float64}("highs")
+    index_map, _ = MOI.optimize!(mzn, model)
+    @test MOI.get(mzn, MOI.TerminationStatus()) == MOI.OPTIMAL
+    @test MOI.get(mzn, MOI.VariablePrimal(), index_map[x]) == 1
     return
 end
 
