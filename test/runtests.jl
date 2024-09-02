@@ -1696,6 +1696,14 @@ function test_integer_bounds_less_than_than()
     index_map, _ = MOI.optimize!(mzn, model)
     @test MOI.get(mzn, MOI.TerminationStatus()) == MOI.OPTIMAL
     @test MOI.get(mzn, MOI.VariablePrimal(), index_map[x]) == 1
+end
+
+function test_minizincset()
+    set = MiniZinc.MiniZincSet("diffn", [1:2, 3:4, 5:6, 7:8])
+    @test MOI.dimension(set) == 8
+    model = MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Float64}())
+    x, _ = MOI.add_constrained_variables(model, set)
+    @test length(x) == 8
     return
 end
 
