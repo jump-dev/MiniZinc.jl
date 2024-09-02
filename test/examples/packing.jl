@@ -19,7 +19,7 @@ function test_packing()
     MOI.set(model, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
 
     # We need this `s` variable that is trivially equal to `sizes`
-    # because `MiniZincSet` only does not take constants
+    # because `MiniZincSet` supports only VectorOfVariables
     s = [MOI.add_constrained_variable(model, MOI.Integer())[1] for i in 1:n]
     x = [MOI.add_constrained_variable(model, MOI.Integer())[1] for i in 1:n]
     y = [MOI.add_constrained_variable(model, MOI.Integer())[1] for i in 1:n]
