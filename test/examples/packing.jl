@@ -11,6 +11,7 @@ function test_packing()
         with_cache_type = Int,
         with_bridge_type = Int,
     )
+    MOI.set(model, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
 
     # We need this `s` variable that is trivially equal to `sizes`
     # because `MiniZincSet` only does not take constants
@@ -52,5 +53,6 @@ function test_packing()
     @test MOI.get(model, MOI.PrimalStatus()) === MOI.FEASIBLE_POINT
     @test MOI.get(model, MOI.ResultCount()) == 1
     @test MOI.get(model, MOI.ObjectiveValue()) == 120
+    rm("test.mzn")
     return
 end
