@@ -21,44 +21,16 @@ function test_packing()
     max_y, _ = MOI.add_constrained_variable(model, MOI.Integer())
 
     for i in 1:n
-        MOI.add_constraint(
-            model,
-            s[i],
-            MOI.EqualTo(sizes[i]),
-        )
-        MOI.add_constraint(
-            model,
-            x[i],
-            MOI.Interval(1, upper_bound),
-        )
-        MOI.add_constraint(
-            model,
-            y[i],
-            MOI.Interval(1, upper_bound),
-        )
+        MOI.add_constraint(model, s[i], MOI.EqualTo(sizes[i]))
+        MOI.add_constraint(model, x[i], MOI.Interval(1, upper_bound))
+        MOI.add_constraint(model, y[i], MOI.Interval(1, upper_bound))
     end
-    MOI.add_constraint(
-        model,
-        max_x,
-        MOI.Interval(1, upper_bound),
-    )
-    MOI.add_constraint(
-        model,
-        max_y,
-        MOI.Interval(1, upper_bound),
-    )
+    MOI.add_constraint(model, max_x, MOI.Interval(1, upper_bound))
+    MOI.add_constraint(model, max_y, MOI.Interval(1, upper_bound))
 
     for i in 1:n
-        MOI.add_constraint(
-            model,
-            1max_x - 1x[i],
-            MOI.GreaterThan(sizes[i]),
-        )
-        MOI.add_constraint(
-            model,
-            1max_y - 1y[i],
-            MOI.GreaterThan(sizes[i]),
-        )
+        MOI.add_constraint(model, 1max_x - 1x[i], MOI.GreaterThan(sizes[i]))
+        MOI.add_constraint(model, 1max_y - 1y[i], MOI.GreaterThan(sizes[i]))
     end
 
     MOI.add_constraint(
