@@ -21,7 +21,7 @@ function runtests()
     return
 end
 
-for file in readdir("examples")
+for file in readdir(joinpath(@__DIR__, "examples"))
     include(joinpath(@__DIR__, "examples", file))
 end
 
