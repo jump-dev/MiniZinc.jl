@@ -149,9 +149,17 @@ function _to_string(
     return ret
 end
 
-struct MiniZincSet <: MOI.AbstractSet
-    name::String
-    fields::Vector{Union{Int,UnitRange{Int}}}
+function _write_constraint(
+    io::IO,
+    predicates::Set,
+    variables::Dict,
+    f::MOI.VectorOfVariables,
+    mzn::MiniZincSet,
+)
+    strs = [_to_string(variables, f.variables[field]) for field in mzn.fields]
+    println(io, "constraint $(mzn.name)(", join(strs, ", "), ");")
+    push!(predicates, mzn.name)
+    return
 end
 
 function _write_constraint(
@@ -167,10 +175,7 @@ function _write_constraint(
         MOI.Circuit,
     },
 )
-    mzn = MiniZincSet(s)
-    strs = [_to_string(variables, f.variables[field]) for field in mzn.fields]
-    println(io, "constraint $(mzn.name)(", join(strs, ", "), ");")
-    push!(predicates, mzn.name)
+    _write_constraint(io, predicates, variables, f, MiniZincSet(s))
     return
 end
 

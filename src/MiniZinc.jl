@@ -15,11 +15,20 @@ const ReifiedEqualTo{T} = MOI.Reified{MOI.EqualTo{T}}
 const ReifiedBinPacking{T} = MOI.Reified{MOI.BinPacking{T}}
 const ReifiedTable{T} = MOI.Reified{MOI.Table{T}}
 
+struct MiniZincSet <: MOI.AbstractVectorSet
+    name::String
+    fields::Vector{Union{Int,UnitRange{Int}}}
+end
+
+MOI.dimension(set::MiniZincSet) = maximum(maximum, set.fields)
+Base.copy(set::MiniZincSet) = set
+
 MOI.Utilities.@model(
     Model,
     (MOI.ZeroOne, MOI.Integer, MOI.EqualTo{Bool}),
     (MOI.EqualTo, MOI.GreaterThan, MOI.LessThan, MOI.Interval),
     (
+        MiniZincSet,
         MOI.AllDifferent,
         MOI.Circuit,
         MOI.CountAtLeast,
