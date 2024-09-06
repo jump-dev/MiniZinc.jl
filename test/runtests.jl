@@ -21,10 +21,6 @@ function runtests()
     return
 end
 
-for file in readdir(joinpath(@__DIR__, "examples"))
-    include(joinpath(@__DIR__, "examples", file))
-end
-
 function _test_file_contents(filename, args...)
     contents = read(filename, String)
     for arg in args
@@ -1704,6 +1700,341 @@ function test_minizincset()
     model = MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Float64}())
     x, _ = MOI.add_constrained_variables(model, set)
     @test length(x) == 8
+    return
+end
+
+function test_example_louvain()
+    edges = [(1, 2, 1); (1, 3, 4); (1, 5, 7); (2, 4, 10); (3, 5, 12)]
+    m = sum(e[3] for e in edges)
+    n_nodes = 5
+    k = [
+        sum((w for (u, v, w) in edges if (u == i || v == i)), init = 0) for
+        i in 1:n_nodes
+    ]
+    n_communities = 2
+    model = MOI.instantiate(
+        () -> MiniZinc.Optimizer{Int}("chuffed");
+        with_cache_type = Int,
+    )
+    MOI.set(
+        model,
+        MOI.RawOptimizerAttribute("model_filename"),
+        "test_louvain.mzn",
+    )
+    x = MOI.add_variables(model, n_nodes)
+    MOI.add_constraint(model, x[1], MOI.EqualTo(1))
+    MOI.add_constraint.(model, x[2:end], MOI.Interval(1, n_communities))
+    terms = Any[]
+    for (u, v, w) in edges
+        o = 2 * m * w - k[u] * k[v]
+        f1 = MOI.ScalarNonlinearFunction(:(==), Any[x[u], x[v]])
+        f2 = MOI.ScalarNonlinearFunction(:ifelse, Any[f1, o, 0])
+        push!(terms, f2)
+    end
+    f = MOI.ScalarNonlinearFunction(:+, terms)
+    MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    MOI.optimize!(model)
+    @test MOI.get(model, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(model, MOI.ResultCount()) >= 1
+    x_sol = MOI.get(model, MOI.VariablePrimal(), x)
+    @test x_sol == [1, 2, 1, 2, 1]
+    @test MOI.get(model, MOI.ObjectiveValue()) == 1410
+    @test MOI.Utilities.eval_variables(vi -> x_sol[vi.value], model, f) == 1410
+    rm("test_louvain.mzn")
+    return
+end
+
+function test_example_nqueens_alldiff()
+    n = 4
+    model = MOI.instantiate(
+        () -> MiniZinc.Optimizer{Int}("chuffed");
+        with_cache_type = Int,
+        with_bridge_type = Int,
+    )
+    MOI.set(
+        model,
+        MOI.RawOptimizerAttribute("model_filename"),
+        "test_nqueens.mzn",
+    )
+    q = MOI.add_variables(model, n)
+    MOI.add_constraint.(model, q, MOI.Interval(1, n))
+    MOI.add_constraint(model, MOI.VectorOfVariables(q), MOI.AllDifferent(n))
+    for op in (+, -)
+        f = MOI.Utilities.vectorize([op(q[i], i) for i in eachindex(q)])
+        MOI.add_constraint(model, f, MOI.AllDifferent(n))
+    end
+    MOI.optimize!(model)
+    @test MOI.get(model, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(model, MOI.ResultCount()) >= 1
+    q_sol = MOI.get(model, MOI.VariablePrimal(), q)
+    @test allunique(q_sol)
+    @test allunique(q_sol .+ (1:n))
+    @test allunique(q_sol .- (1:n))
+    rm("test_nqueens.mzn")
+    return
+end
+
+function _init_nqueens_solve_num_solutions()
+    n = 8
+    model = MOI.instantiate(
+        () -> MiniZinc.Optimizer{Int}("chuffed");
+        with_cache_type = Int,
+        with_bridge_type = Int,
+    )
+    MOI.set(model, MOI.RawOptimizerAttribute("model_filename"), "test.mzn")
+    q = MOI.add_variables(model, n)
+    MOI.add_constraint.(model, q, MOI.Interval(1, n))
+    MOI.add_constraint(model, MOI.VectorOfVariables(q), MOI.AllDifferent(n))
+    for op in (+, -)
+        f = MOI.Utilities.vectorize([op(q[i], i) for i in eachindex(q)])
+        MOI.add_constraint(model, f, MOI.AllDifferent(n))
+    end
+    return model, q
+end
+
+function _test_nqueens_solve_num_solutions(
+    model,
+    q,
+    actual_count = 52,
+    termination_status = MOI.OPTIMAL,
+)
+    n = 8
+    MOI.optimize!(model)
+    @test MOI.get(model, MOI.TerminationStatus()) === termination_status
+    res_count = MOI.get(model, MOI.ResultCount())
+    @test res_count == actual_count
+    for i in 1:res_count
+        q_sol = MOI.get(model, MOI.VariablePrimal(i), q)
+        @test allunique(q_sol)
+        @test allunique(q_sol .+ (1:n))
+        @test allunique(q_sol .- (1:n))
+    end
+    @test MOI.get(model, MOI.SolveTimeSec()) < 4.0
+    rm("test.mzn")
+    return
+end
+
+function test_example_nqueens_solve_num_solutions_100()
+    model, q = _init_nqueens_solve_num_solutions()
+    MOI.set(model, MOI.SolutionLimit(), 100)
+    _test_nqueens_solve_num_solutions(model, q)
+    return
+end
+
+function test_example_nqueens_solve_num_solutions_25()
+    model, q = _init_nqueens_solve_num_solutions()
+    MOI.set(model, MOI.SolutionLimit(), 25)
+    _test_nqueens_solve_num_solutions(model, q, 25, MOI.SOLUTION_LIMIT)
+    return
+end
+
+function test_example_nqueens_solve_num_solutions_not_set()
+    model, q = _init_nqueens_solve_num_solutions()
+    _test_nqueens_solve_num_solutions(model, q, 1)
+    return
+end
+
+function test_example_nqueens_solve_num_solutions_1()
+    model, q = _init_nqueens_solve_num_solutions()
+    MOI.set(model, MOI.SolutionLimit(), 1)
+    _test_nqueens_solve_num_solutions(model, q, 1, MOI.SOLUTION_LIMIT)
+    return
+end
+
+function test_example_nqueens_num_solutions_throw()
+    model, _ = _init_nqueens_solve_num_solutions()
+    for value in (-1, 0, 1.1, "two")
+        @test_throws(
+            MOI.SetAttributeNotAllowed,
+            MOI.set(model, MOI.SolutionLimit(), value)
+        )
+    end
+    return
+end
+
+function test_example_nqueens_expr_tree()
+    n = 4
+    model = MOI.instantiate(
+        () -> MiniZinc.Optimizer{Int}("chuffed");
+        with_cache_type = Int,
+    )
+    MOI.set(
+        model,
+        MOI.RawOptimizerAttribute("model_filename"),
+        "test_expr_tree.mzn",
+    )
+    q = MOI.add_variables(model, n)
+    MOI.add_constraint.(model, q, MOI.Interval(1, n))
+    for i in 1:n, j in (1+i):n
+        snf1 = MOI.ScalarNonlinearFunction(:(!=), Any[q[i], q[j]])
+        MOI.add_constraint(model, snf1, MOI.EqualTo(1))
+        snf2 = MOI.ScalarNonlinearFunction(:-, Any[q[i], q[j]])
+        snf3 = MOI.ScalarNonlinearFunction(:abs, Any[snf2])
+        snf4 = MOI.ScalarNonlinearFunction(:(!=), Any[snf3, j-i])
+        MOI.add_constraint(model, snf4, MOI.EqualTo(1))
+    end
+    MOI.optimize!(model)
+    @test MOI.get(model, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(model, MOI.ResultCount()) >= 1
+    q_sol = MOI.get(model, MOI.VariablePrimal(), q)
+    @test allunique(q_sol)
+    @test allunique(q_sol .+ (1:n))
+    @test allunique(q_sol .- (1:n))
+    rm("test_expr_tree.mzn")
+    return
+end
+
+# Inspired from the square packing tutorial in https://www.minizinc.org/
+function test_example_packing()
+    n = 6
+    sizes = collect(1:n)
+    upper_bound = sum(sizes)
+    model = MOI.instantiate(
+        () -> MiniZinc.Optimizer{Int}("chuffed");
+        with_cache_type = Int,
+        with_bridge_type = Int,
+    )
+    MOI.set(
+        model,
+        MOI.RawOptimizerAttribute("model_filename"),
+        "test_packing.mzn",
+    )
+    # We need this `s` variable that is trivially equal to `sizes`
+    # because `MiniZincSet` supports only VectorOfVariables
+    s = [MOI.add_constrained_variable(model, MOI.Integer())[1] for i in 1:n]
+    x = [MOI.add_constrained_variable(model, MOI.Integer())[1] for i in 1:n]
+    y = [MOI.add_constrained_variable(model, MOI.Integer())[1] for i in 1:n]
+    max_x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    max_y, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.add_constraint.(model, s, MOI.EqualTo.(sizes))
+    MOI.add_constraint.(model, x, MOI.Interval(1, upper_bound))
+    MOI.add_constraint.(model, y, MOI.Interval(1, upper_bound))
+    MOI.add_constraint(model, max_x, MOI.Interval(1, upper_bound))
+    MOI.add_constraint(model, max_y, MOI.Interval(1, upper_bound))
+    MOI.add_constraint.(model, 1max_x .- 1x, MOI.GreaterThan.(sizes))
+    MOI.add_constraint.(model, 1max_y .- 1y, MOI.GreaterThan.(sizes))
+    MOI.add_constraint(
+        model,
+        MOI.VectorOfVariables([x; y; s; s]),
+        MiniZinc.MiniZincSet(
+            "diffn",
+            [1:n, n .+ (1:n), 2n .+ (1:n), 3n .+ (1:n)],
+        ),
+    )
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+    obj = (1max_x) * max_y
+    MOI.set(model, MOI.ObjectiveFunction{typeof(obj)}(), obj)
+    MOI.optimize!(model)
+    @test MOI.get(model, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(model, MOI.PrimalStatus()) === MOI.FEASIBLE_POINT
+    @test MOI.get(model, MOI.ResultCount()) == 1
+    @test MOI.get(model, MOI.ObjectiveValue()) == 120
+    rm("test_packing.mzn")
+    return
+end
+
+function test_example_send_more_money()
+    model = MOI.instantiate(
+        () -> MiniZinc.Optimizer{Int}("chuffed");
+        with_cache_type = Int,
+    )
+    MOI.set(
+        model,
+        MOI.RawOptimizerAttribute("model_filename"),
+        "test_send_more_money.mzn",
+    )
+    S, _ = MOI.add_constrained_variable(model, MOI.Interval(1, 9))
+    E, _ = MOI.add_constrained_variable(model, MOI.Interval(0, 9))
+    N, _ = MOI.add_constrained_variable(model, MOI.Interval(0, 9))
+    D, _ = MOI.add_constrained_variable(model, MOI.Interval(0, 9))
+    M, _ = MOI.add_constrained_variable(model, MOI.Interval(1, 9))
+    O, _ = MOI.add_constrained_variable(model, MOI.Interval(0, 9))
+    R, _ = MOI.add_constrained_variable(model, MOI.Interval(0, 9))
+    Y, _ = MOI.add_constrained_variable(model, MOI.Interval(0, 9))
+    x = [S, E, N, D, M, O, R, Y]
+    MOI.add_constraint.(model, x, MOI.Integer())
+    f =
+        (1_000 * S + 100 * E + 10 * N + D) +
+        (1_000 * M + 100 * O + 10 * R + E) -
+        (10_000 * M + 1_000 * O + 100 * N + 10 * E + Y)
+    MOI.add_constraint.(model, f, MOI.EqualTo(0))
+    MOI.add_constraint(model, MOI.VectorOfVariables(x), MOI.AllDifferent(8))
+    MOI.optimize!(model)
+    @test MOI.get(model, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(model, MOI.ResultCount()) >= 1
+    v = MOI.get(model, MOI.VariablePrimal(), x)
+    send = 1_000 * v[1] + 100 * v[2] + 10 * v[3] + v[4]
+    more = 1_000 * v[5] + 100 * v[6] + 10 * v[7] + v[2]
+    money = 10_000 * v[5] + 1_000 * v[6] + 100 * v[3] + 10 * v[2] + v[8]
+    @test send + more == money
+    rm("test_send_more_money.mzn")
+    return
+end
+
+function test_example_sudoku()
+    start = [
+        5 3 0 0 7 0 0 0 0
+        6 0 0 1 9 5 0 0 0
+        0 9 8 0 0 0 0 6 0
+        8 0 0 0 6 0 0 0 3
+        4 0 0 8 0 3 0 0 1
+        7 0 0 0 2 0 0 0 6
+        0 6 0 0 0 0 2 8 0
+        0 0 0 4 1 9 0 0 5
+        0 0 0 0 8 0 0 7 9
+    ]
+    n = 9
+    m = 3
+    model = MOI.instantiate(
+        () -> MiniZinc.Optimizer{Int}("chuffed");
+        with_cache_type = Int,
+    )
+    MOI.set(
+        model,
+        MOI.RawOptimizerAttribute("model_filename"),
+        "test_sudoku.mzn",
+    )
+    x = MOI.add_variables(model, n^2)
+    X = reshape(x, n, n)
+    for i in 1:n, j in 1:n
+        sij = start[i, j]
+        setij = iszero(sij) ? MOI.Interval(1, n) : MOI.EqualTo(sij)
+        MOI.add_constraint(model, X[i, j], setij)
+    end
+    for i in 1:n, xi in (X[i, :], X[:, i])
+        vv = MOI.VectorOfVariables(xi)
+        MOI.add_constraint(model, vv, MOI.AllDifferent(n))
+    end
+    for k in 1:m, l in 1:m
+        ii = ((k-1)*m+1):(k*m)
+        jj = ((l-1)*m+1):(l*m)
+        square = MOI.VectorOfVariables(vec(X[ii, jj]))
+        MOI.add_constraint(model, square, MOI.AllDifferent(n))
+    end
+    MOI.optimize!(model)
+    @test MOI.get(model, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(model, MOI.ResultCount()) >= 1
+    X_sol = reshape(MOI.get(model, MOI.VariablePrimal(), x), n, n)
+    sol = [
+        5 3 4 6 7 8 9 1 2
+        6 7 2 1 9 5 3 4 8
+        1 9 8 3 4 2 5 6 7
+        8 5 9 7 6 1 4 2 3
+        4 2 6 8 5 3 7 9 1
+        7 1 3 9 2 4 8 5 6
+        9 6 1 5 3 7 2 8 4
+        2 8 7 4 1 9 6 3 5
+        3 4 5 2 8 6 1 7 9
+    ]
+    @test X_sol == sol
+    f = MOI.ScalarNonlinearFunction(:(!=), Any[X[1, 3], sol[1, 3]])
+    MOI.add_constraint(model, f, MOI.EqualTo(1))
+    MOI.optimize!(model)
+    @test MOI.get(model, MOI.TerminationStatus()) === MOI.INFEASIBLE
+    @test MOI.get(model, MOI.PrimalStatus()) === MOI.NO_SOLUTION
+    @test MOI.get(model, MOI.ResultCount()) == 0
+    rm("test_sudoku.mzn")
     return
 end
 
