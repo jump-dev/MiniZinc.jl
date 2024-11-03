@@ -1526,10 +1526,10 @@ function test_highs_feasibility()
 end
 
 function test_highs_optimization()
-    model = MOI.Utilities.Model{Float64}()
+    model = MOI.Utilities.Model{Int}()
     x, _ = MOI.add_constrained_variable(model, MOI.Integer())
-    MOI.add_constraint(model, x, MOI.Interval(1.0, 10.0))
-    MOI.set(model, MOI.ObjectiveFunction{typeof(x)}(), x)
+    MOI.add_constraint(model, x, MOI.Interval(1, 10))
+    MOI.set(model, MOI.ObjectiveFunction{MOI.VariableIndex}(), x)
     MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
     solver = MiniZinc.Optimizer{Int}("highs")
     index_map, _ = MOI.optimize!(solver, model)
