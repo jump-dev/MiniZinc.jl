@@ -1796,10 +1796,7 @@ end
 function _test_nqueens_solve_num_solutions(
     model,
     q,
-    # This value is wrong due to a bug in Chuffed@0.13.2. If it is fixed in
-    # the future, the true value should be 92.
-    # See https://github.com/jump-dev/MiniZinc.jl/issues/84 for details.
-    actual_count = 52,
+    actual_count = 92,
     termination_status = MOI.OPTIMAL,
 )
     n = 8
