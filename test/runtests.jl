@@ -1796,17 +1796,14 @@ end
 function _test_nqueens_solve_num_solutions(
     model,
     q,
-    # This value is wrong due to a bug in Chuffed@0.13.2. If it is fixed in
-    # the future, the true value should be 92.
-    # See https://github.com/jump-dev/MiniZinc.jl/issues/84 for details.
-    actual_count = 52,
+    actual_count::Vector,
     termination_status = MOI.OPTIMAL,
 )
     n = 8
     MOI.optimize!(model)
     @test MOI.get(model, MOI.TerminationStatus()) === termination_status
     res_count = MOI.get(model, MOI.ResultCount())
-    @test res_count == actual_count
+    @test res_count in actual_count
     for i in 1:res_count
         q_sol = MOI.get(model, MOI.VariablePrimal(i), q)
         @test allunique(q_sol)
@@ -1821,27 +1818,30 @@ end
 function test_example_nqueens_solve_num_solutions_100()
     model, q = _init_nqueens_solve_num_solutions()
     MOI.set(model, MOI.SolutionLimit(), 100)
-    _test_nqueens_solve_num_solutions(model, q)
+    # This value is wrong due to a bug in Chuffed@0.13.2. If it is fixed in
+    # the future, the true value should be 92.
+    # See https://github.com/jump-dev/MiniZinc.jl/issues/84 for details.
+    _test_nqueens_solve_num_solutions(model, q, [52, 92])
     return
 end
 
 function test_example_nqueens_solve_num_solutions_25()
     model, q = _init_nqueens_solve_num_solutions()
     MOI.set(model, MOI.SolutionLimit(), 25)
-    _test_nqueens_solve_num_solutions(model, q, 25, MOI.SOLUTION_LIMIT)
+    _test_nqueens_solve_num_solutions(model, q, [25], MOI.SOLUTION_LIMIT)
     return
 end
 
 function test_example_nqueens_solve_num_solutions_not_set()
     model, q = _init_nqueens_solve_num_solutions()
-    _test_nqueens_solve_num_solutions(model, q, 1)
+    _test_nqueens_solve_num_solutions(model, q, [1])
     return
 end
 
 function test_example_nqueens_solve_num_solutions_1()
     model, q = _init_nqueens_solve_num_solutions()
     MOI.set(model, MOI.SolutionLimit(), 1)
-    _test_nqueens_solve_num_solutions(model, q, 1, MOI.SOLUTION_LIMIT)
+    _test_nqueens_solve_num_solutions(model, q, [1], MOI.SOLUTION_LIMIT)
     return
 end
 
