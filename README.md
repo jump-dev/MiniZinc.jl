@@ -1,5 +1,8 @@
 # MiniZinc.jl
 
+[![Build Status](https://github.com/jump-dev/MiniZinc.jl/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/jump-dev/MiniZinc.jl/actions?query=workflow%3ACI)
+[![codecov](https://codecov.io/gh/jump-dev/MiniZinc.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/jump-dev/MiniZinc.jl)
+
 [MiniZinc.jl](https://github.com/jump-dev/MiniZinc.jl) is a wrapper for the
 [MiniZinc](https://www.minizinc.org) constraint modeling language.
 
