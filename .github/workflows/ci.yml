@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         version: ['1.6', '1']  # Test against LTS and current minor release
-        os: [ubuntu-latest, macOS-latest]  # MiniZinc_jll broken on windows-latest
+        os: [ubuntu-latest, macOS-latest, windows-latest]
         arch: [x64]
     steps:
       - uses: actions/checkout@v4
