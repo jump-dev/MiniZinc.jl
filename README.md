@@ -123,6 +123,13 @@ optimize!(model)
 @show value.(x)
 ```
 
+In order to use the CP-SAT solver from ORTools, use
+```julia
+import ORTools_jll
+path = joinpath(ORTools_jll.artifact_dir, "share", "minizinc", "solvers", "cp-sat.msc")
+model = Model(() -> MiniZinc.Optimizer{Float64}(path))
+```
+
 ## MathOptInterface API
 
 The MiniZinc `Optimizer{T}` supports the following constraints and attributes.
