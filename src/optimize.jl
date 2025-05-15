@@ -61,7 +61,7 @@ function _minizinc_exe(f::F) where {F}
         else
             return f(joinpath(user_dir, "minizinc"))
         end
-    elseif Sys.islinux() || Sys.isapple()
+    else MiniZinc_jll.is_available()
         return f(MiniZinc_jll.minizinc())
     end
     return error(
