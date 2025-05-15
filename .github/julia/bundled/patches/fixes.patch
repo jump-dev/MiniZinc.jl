@@ -13,7 +13,7 @@
  // Macro so that we can use overloaded wide versions of fstream::open for Windows
  #ifdef _WIN32
 -#define FILE_PATH(path) MiniZinc::FileUtils::utf8_to_wide(path)
-+#define FILE_PATH(path) std::filesystem::path(path)
++#define FILE_PATH(p) std::filesystem::path(p)
  #else
  #define FILE_PATH(path) (path)
  #endif
