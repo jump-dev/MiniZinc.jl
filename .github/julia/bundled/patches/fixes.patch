@@ -1,3 +1,22 @@
+--- a/cmake/support/compiler_setup.cmake
++++ b/cmake/support/compiler_setup.cmake
+@@ -1,4 +1,4 @@
+-set(CMAKE_CXX_STANDARD 11)
++set(CMAKE_CXX_STANDARD 17)
+ 
+ option(USE_ADDRESS_SANITIZER "Use GCC Address Sanitizer" OFF)
+ if(USE_ADDRESS_SANITIZER)
+--- a/include/minizinc/file_utils.hh
++++ b/include/minizinc/file_utils.hh
+@@ -16,7 +16,7 @@
+ 
+ // Macro so that we can use overloaded wide versions of fstream::open for Windows
+ #ifdef _WIN32
+-#define FILE_PATH(path) MiniZinc::FileUtils::utf8_to_wide(path)
++#define FILE_PATH(path) std::filesystem::path(path)
+ #else
+ #define FILE_PATH(path) (path)
+ #endif
 --- a/include/minizinc/process.hh
 +++ b/include/minizinc/process.hh
 @@ -225,11 +225,11 @@ public:
