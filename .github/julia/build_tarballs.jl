@@ -11,7 +11,7 @@ sources = [
         "https://github.com/MiniZinc/libminizinc.git",
         "2fdef7b40921981f3f9ea82017e9d84937ddab77",
     ),
-    DirectorySource("./bundled"),
+    DirectorySource(joinpath(@__DIR__, "bundled")),
 ]
 
 script = raw"""
