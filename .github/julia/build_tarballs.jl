@@ -17,7 +17,7 @@ sources = [
 script = raw"""
 cd $WORKSPACE/srcdir/libminizinc
 
-atomic_patch -p1 ${WORKSPACE}/srcdir/patches/fixes.patch
+# atomic_patch -p1 ${WORKSPACE}/srcdir/patches/fixes.patch
 
 # Patch for MinGW toolchain
 find .. -type f -exec sed -i 's/Windows.h/windows.h/g' {} +
@@ -60,6 +60,6 @@ build_tarballs(
     platforms,
     products,
     dependencies;
-    preferred_gcc_version = v"6",
+    preferred_gcc_version = v"12",
     julia_compat = "1.6",
 )
