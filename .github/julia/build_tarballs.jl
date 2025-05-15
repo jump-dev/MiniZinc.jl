@@ -28,7 +28,7 @@ cmake -B build \
     -DCMAKE_INSTALL_PREFIX=${prefix} \
     -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TARGET_TOOLCHAIN} \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_CXX_FLAGS="-I${includedir}/highs" \
+    -DCMAKE_CXX_FLAGS="-std=c++17 -I${includedir}/highs" \
     -DFAST_BUILD=ON
 cmake --build build --parallel ${nproc}
 cmake --install build
