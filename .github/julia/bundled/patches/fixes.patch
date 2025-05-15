@@ -1,3 +1,14 @@
+--- a/lib/file_utils.cpp
++++ b/lib/file_utils.cpp
+@@ -130,7 +130,7 @@ std::string file_path(const std::string& filename, const std::string& basePath)
+   auto f = !basePath.empty() && !is_absolute(filename) ? basePath + "/" + filename : filename;
+ 
+   // Get real path of absolute path or resolve relative to current directory
+-#ifdef _MSC_VER
++#ifdef _WIN32
+   LPWSTR lpFilePart;
+   DWORD nBufferLength = GetFullPathNameW(utf8_to_wide(f).c_str(), 0, nullptr, &lpFilePart);
+   auto* lpBuffer = static_cast<LPWSTR>(LocalAlloc(LMEM_FIXED, sizeof(WCHAR) * nBufferLength));
 --- a/include/minizinc/file_utils.hh
 +++ b/include/minizinc/file_utils.hh
 @@ -16,7 +16,7 @@
