@@ -123,7 +123,11 @@ optimize!(model)
 @show value.(x)
 ```
 
-In order to use the CP-SAT solver from ORTools, use
+### CP-SAT
+
+**`ORTools_jll` currently requires Linux**
+
+In order to use the CP-SAT solver from ORTools, use:
 ```julia
 import ORTools_jll
 path = joinpath(ORTools_jll.artifact_dir, "share", "minizinc", "solvers", "cp-sat.msc")
