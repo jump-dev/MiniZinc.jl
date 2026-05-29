@@ -190,18 +190,21 @@ List of supported constraint attributes:
 ## Conflicts (IIS)
 
 For an infeasible model, [`MOI.compute_conflict!`](@ref) finds a minimal
-conflicting subset of constraints (an Irreducible Infeasible Subset), after
-which [`MOI.ConstraintConflictStatus`](@ref) reports which constraints
-participate:
+conflicting subset of constraints (an Irreducible Inconsistent Subsystem),
+after which [`MOI.ConstraintConflictStatus`](@ref) reports which constraints
+participate. Using the `model` from the example above:
 
 ```julia
 MOI.optimize!(model)
 if MOI.get(model, MOI.TerminationStatus()) == MOI.INFEASIBLE
     MOI.compute_conflict!(model)
     if MOI.get(model, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
-        for ci in conflicting_candidates
-            status = MOI.get(model, MOI.ConstraintConflictStatus(), ci)
-            # status is MOI.IN_CONFLICT or MOI.NOT_IN_CONFLICT
+        # Query each constraint you added to `model` for its participation.
+        for (F, S) in MOI.get(model, MOI.ListOfConstraintTypesPresent())
+            for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
+                status = MOI.get(model, MOI.ConstraintConflictStatus(), ci)
+                # status is MOI.IN_CONFLICT or MOI.NOT_IN_CONFLICT
+            end
         end
     end
 end

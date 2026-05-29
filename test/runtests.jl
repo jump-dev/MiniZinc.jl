@@ -2102,27 +2102,95 @@ function test_write_conflict_annotations()
     return
 end
 
+# The annotation splice must hold across every constraint shape, not only
+# `ScalarAffineFunction` — especially the global/nonlinear emitters whose
+# `_write_constraint` overloads build the line across multiple `print` calls.
+function test_write_conflict_annotations_shapes()
+    model = MiniZinc.Model{Int}()
+    x = [MOI.add_constrained_variable(model, MOI.Integer())[1] for _ in 1:3]
+    for i in 1:3
+        MOI.set(model, MOI.VariableName(), x[i], "x$i")
+    end
+    saf = MOI.ScalarAffineFunction(
+        [MOI.ScalarAffineTerm(1, x[1]), MOI.ScalarAffineTerm(1, x[2])],
+        0,
+    )
+    MOI.add_constraint(model, saf, MOI.LessThan(5))
+    MOI.add_constraint(
+        model,
+        MOI.VectorOfVariables(x),
+        MOI.Table([1 1 0; 0 1 1]),
+    )
+    nl = MOI.ScalarNonlinearFunction(:alldifferent, Any[x])
+    MOI.add_constraint(model, nl, MOI.EqualTo(1))
+    model.ext[:conflict_annotate] = true
+    annotated = sprint(write, model)
+    lines = filter(startswith("constraint "), split(annotated, '\n'))
+    # Affine, table (loop-built), and nonlinear-global lines are each wrapped
+    # and annotated with a well-formed token; none trips the splice guard.
+    @test length(lines) == 3
+    for line in lines
+        @test occursin(r"^constraint \(.*\) :: \"c\d+\";$", line)
+    end
+    @test length(model.ext[:conflict_tokens]) == 3
+    return
+end
+
 # The findMUS report parser keys off the `%%%mzn-json-*` block markers and the
 # `expression_name` field. Exercise it with canned reports (no findMUS needed).
 function test_parse_findmus_tokens()
     known = Set(["c1", "c2", "c3"])
+    # findMUS emits one field per line, with no space before the colon.
     report = """
     preamble
     %%%mzn-json-start
-    { "expression_name" : "c1" },
-    { "expression_name" : "c2" }
+    { "expression_name": "c1" },
+    { "expression_name": "c2" }
     %%%mzn-json-end
     """
     @test MiniZinc._parse_findmus_tokens(report, known) == Set(["c1", "c2"])
+    # A compacted block (several fields on one line) must still yield every
+    # member, not just the first.
+    compact = "%%%mzn-json-start\n{\"expression_name\": \"c1\", \"x\": 0, \"expression_name\": \"c2\"}\n%%%mzn-json-end\n"
+    @test MiniZinc._parse_findmus_tokens(compact, known) == Set(["c1", "c2"])
     # An `expression_name` outside the JSON block is ignored.
     @test isempty(
-        MiniZinc._parse_findmus_tokens("\"expression_name\" : \"c1\"", known),
+        MiniZinc._parse_findmus_tokens("\"expression_name\": \"c1\"", known),
     )
     # Tokens we did not emit are ignored even inside the block.
-    foreign = "%%%mzn-json-start\n{ \"expression_name\" : \"other\" }\n%%%mzn-json-end\n"
+    foreign = "%%%mzn-json-start\n{\"expression_name\": \"other\"}\n%%%mzn-json-end\n"
     @test isempty(MiniZinc._parse_findmus_tokens(foreign, known))
     # No block markers -> nothing found.
     @test isempty(MiniZinc._parse_findmus_tokens("no markers here", known))
+    return
+end
+
+# The findMUS command is not exercised by CI without findMUS installed, so lock
+# its flags here. Each is load-bearing and verified against findMUS v0.7.0.
+function test_findmus_command()
+    cmd = MiniZinc._findmus_cmd(
+        "minizinc",
+        "/x/findmus.msc",
+        "/x/model.mzn",
+        60_000,
+        30_000,
+    )
+    args = cmd.exec
+    for flag in (
+        "--named-only",
+        "-g",
+        "--soft-defines",
+        "--paramset",
+        "mzn",
+        "--output-json",
+        "--no-leftover",
+        "org.chuffed.chuffed",
+    )
+        @test flag in args
+    end
+    @test args[findfirst(==("-n"), args)+1] == "1"
+    @test args[findfirst(==("-t"), args)+1] == "60000"
+    @test args[findfirst(==("--subsolver-timelimit"), args)+1] == "30000"
     return
 end
 
@@ -2132,7 +2200,7 @@ function test_classify_conflict()
     F, S = MOI.ScalarAffineFunction{Int}, MOI.LessThan{Int}
     ci(i) = MOI.ConstraintIndex{F,S}(i)
     tokens = Dict{MOI.ConstraintIndex,String}(ci(1) => "c1", ci(2) => "c2")
-    mus = "%%%mzn-json-start\n{ \"expression_name\" : \"c2\" }\n%%%mzn-json-end\n"
+    mus = "%%%mzn-json-start\n{ \"expression_name\": \"c2\" }\n%%%mzn-json-end\n"
     # A reported MUS -> CONFLICT_FOUND with exactly its members, trusted even
     # when the process also reports a non-zero exit.
     status, conflict = MiniZinc._classify_conflict(
@@ -2171,6 +2239,17 @@ function test_classify_conflict()
             tokens,
         ),
     )
+    # An empty token table (a model with no annotatable constraints, e.g. only
+    # variable bounds, which fold into declarations) can never yield
+    # CONFLICT_FOUND, whatever the report contains.
+    status, conflict = MiniZinc._classify_conflict(
+        mus,
+        "",
+        nothing,
+        Dict{MOI.ConstraintIndex,String}(),
+    )
+    @test status == MOI.NO_CONFLICT_FOUND
+    @test isempty(conflict)
     return
 end
 

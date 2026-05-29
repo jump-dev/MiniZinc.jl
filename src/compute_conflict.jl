@@ -42,6 +42,23 @@ function _findmus_solver_path(msc::AbstractString)
     return join(dirs, sep)
 end
 
+# The findMUS invocation. `--named-only` scopes the search to our annotated
+# constraints; `-g --soft-defines` keep bound/functional constraints from being
+# absorbed into variable domains (otherwise they vanish from the MUS);
+# `--no-leftover` suppresses any non-minimal candidate emitted on timeout, so any
+# reported MUS is guaranteed minimal; `--paramset mzn` selects MiniZinc-level
+# output so each member's annotation surfaces as its `expression_name`. Kept a
+# pure builder so the exact flag set stays unit-testable without findMUS present.
+function _findmus_cmd(
+    exe,
+    msc::AbstractString,
+    filename::AbstractString,
+    overall_ms::Integer,
+    sub_ms::Integer,
+)
+    return `$(exe) --solver $(msc) --named-only -g --soft-defines --paramset mzn --output-json -n 1 -t $(overall_ms) --no-leftover --subsolver org.chuffed.chuffed --subsolver-timelimit $(sub_ms) $(filename)`
+end
+
 # Run findMUS on the (annotated) inner model. Returns
 # `(stdout, stderr, failure, tokens)` where `failure` is `nothing` on a clean run
 # or a human-readable reason otherwise, and `tokens` is the
@@ -56,20 +73,21 @@ function _run_findmus(dest::Optimizer, msc::AbstractString)
         Dict{MOI.ConstraintIndex,String}(),
     )
     overall_ms = round(Int, 1_000 * something(dest.time_limit_sec, 60.0))
+    # Per-check subsolver budget. findMUS first proves the whole model UNSAT
+    # within this limit (it aborts with a failure otherwise) and treats a
+    # subsolver timeout as SAT, so it must be generous enough for the full-model
+    # check while staying bounded.
     sub_ms = clamp(div(overall_ms, 2), 1_000, 30_000)
     solver_path = _findmus_solver_path(msc)
     out_file = joinpath(dir, "stdout.txt")
     err_file = joinpath(dir, "stderr.txt")
     killed = Ref(false)
-    # `--named-only` scopes the search to our annotated constraints; `-g
-    # --soft-defines` keep bound/functional constraints from being absorbed into
-    # variable domains (otherwise they vanish from the MUS); `--no-leftover`
-    # suppresses any non-minimal candidate emitted on timeout, so any reported
-    # MUS is guaranteed minimal.
     failure = try
         _minizinc_exe() do exe
-            cmd = `$(exe) --solver $(msc) --named-only -g --soft-defines --paramset mzn --output-json -n 1 -t $(overall_ms) --no-leftover --subsolver org.chuffed.chuffed --subsolver-timelimit $(sub_ms) $(filename)`
-            cmd = addenv(cmd, "MZN_SOLVER_PATH" => solver_path)
+            cmd = addenv(
+                _findmus_cmd(exe, msc, filename, overall_ms, sub_ms),
+                "MZN_SOLVER_PATH" => solver_path,
+            )
             proc = run(
                 pipeline(cmd; stdout = out_file, stderr = err_file);
                 wait = false,
@@ -86,12 +104,15 @@ function _run_findmus(dest::Optimizer, msc::AbstractString)
             finally
                 close(timer)
             end
-            if killed[]
+            # A process that exited cleanly is a success even if the backstop
+            # timer fired in the narrow race before `wait` returned (`kill` on an
+            # already-finished process is a no-op).
+            if success(proc)
+                return nothing
+            elseif killed[]
                 return "findMUS exceeded the wall-clock limit and was terminated"
-            elseif !success(proc)
-                return "findMUS exited with a non-zero status"
             end
-            return nothing
+            return "findMUS exited with a non-zero status"
         end
     catch err
         err isa InterruptException && rethrow(err)
@@ -103,11 +124,11 @@ function _run_findmus(dest::Optimizer, msc::AbstractString)
 end
 
 # Collect the `expression_name` tokens findMUS reports inside its
-# `%%%mzn-json-start … %%%mzn-json-end` block, keeping only tokens we emitted.
-# This relies on findMUS pretty-printing one JSON field per line
-# (`lib/Types.cpp::getJSONSummary`) and on `-n 1` + `--no-leftover` yielding at
-# most one block; a switch to compact JSON output upstream would break this
-# line-based scan.
+# `%%%mzn-json-start … %%%mzn-json-end` block (emitted by `--output-json`, which
+# `_findmus_cmd` always passes), keeping only tokens we emitted. `eachmatch`
+# scans each line for every `expression_name`, so a compacted block (more than
+# one field on a line, as `--json-stream` would emit) is not under-reported.
+# `-n 1` + `--no-leftover` yield at most one block; multiple would simply union.
 function _parse_findmus_tokens(output::AbstractString, known::Set{String})
     found = Set{String}()
     in_block = false
@@ -117,9 +138,10 @@ function _parse_findmus_tokens(output::AbstractString, known::Set{String})
         elseif occursin("%%%mzn-json-end", line)
             in_block = false
         elseif in_block
-            m = match(r"\"expression_name\"\s*:\s*\"([^\"]*)\"", line)
-            if m !== nothing && m[1] in known
-                push!(found, m[1])
+            for m in eachmatch(r"\"expression_name\"\s*:\s*\"([^\"]*)\"", line)
+                if m[1] in known
+                    push!(found, m[1])
+                end
             end
         end
     end
@@ -156,6 +178,11 @@ function _classify_conflict(
     if !isempty(conflict)
         return MOI.CONFLICT_FOUND, conflict
     end
+    # findMUS's two benign non-conflict messages on stderr: a satisfiable
+    # foreground (`EXIT_SUCCESS`), and a conflict lying only in unnamed/background
+    # constraints. Tracked against findMUS v0.7.0; re-verify the spellings when
+    # bumping FindMUS_jll (`test_compute_conflict_feasible` covers the satisfiable
+    # path once findMUS is available).
     benign =
         occursin("Model is Satisfiable", errors) ||
         occursin("Background is not satisfiable", errors)
@@ -165,7 +192,8 @@ function _classify_conflict(
     return error(
         "findMUS failed to compute a conflict: ",
         failure,
-        ".\n",
+        ". If findMUS timed out, raise the limit with `MOI.TimeLimitSec`; ",
+        "otherwise see the README for findMUS setup.\n",
         strip(string(errors, "\n", output)),
     )
 end
@@ -173,9 +201,9 @@ end
 """
     MOI.compute_conflict!(model::Optimizer)
 
-Compute a minimal conflicting subset of constraints (an Irreducible Infeasible
-Subset) for an infeasible model using findMUS, and record it for
-[`MOI.ConstraintConflictStatus`](@ref). Call after `optimize!` returns
+Compute a minimal conflicting subset of constraints (an Irreducible
+Inconsistent Subsystem) for an infeasible model using findMUS, and record it
+for [`MOI.ConstraintConflictStatus`](@ref). Call after `optimize!` returns
 `INFEASIBLE`.
 
 The outcome is reported through [`MOI.ConflictStatus`](@ref):

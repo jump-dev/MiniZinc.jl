@@ -544,8 +544,9 @@ function _write_annotated_constraint(
     _write_constraint(buf, predicates, variables, f, s)
     line = String(take!(buf))
     # The splice depends on the one-`constraint`-per-overload invariant above.
-    # Check it explicitly rather than with `@assert`, which is elided under
-    # `--check-bounds=no`; a violation would otherwise silently corrupt a token.
+    # Check it explicitly rather than with `@assert`, which Julia may disable at
+    # higher optimization levels; a violation would otherwise silently corrupt a
+    # token.
     if !startswith(line, "constraint ") || !endswith(line, ";\n")
         error("cannot annotate constraint output: ", repr(line))
     end
