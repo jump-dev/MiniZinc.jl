@@ -2041,6 +2041,167 @@ function test_example_sudoku()
     return
 end
 
+# --- Conflict (IIS) support via findMUS -----------------------------------------
+
+# An infeasible CP model whose conflict lies in two multi-variable constraints
+# (c1, c2) so they are emitted as annotatable `constraint` lines; c3 is
+# satisfiable and unrelated. Returns the optimizer, the src->inner index map, and
+# the source constraint indices.
+function _conflict_model()
+    src = MiniZinc.Model{Int}()
+    x = MOI.add_variable(src)
+    y = MOI.add_variable(src)
+    z = MOI.add_variable(src)
+    for (v, n) in ((x, "x"), (y, "y"), (z, "z"))
+        MOI.set(src, MOI.VariableName(), v, n)
+        MOI.add_constraint(src, v, MOI.Interval(1, 10))
+    end
+    xy = MOI.ScalarAffineFunction(
+        [MOI.ScalarAffineTerm(1, x), MOI.ScalarAffineTerm(1, y)],
+        0,
+    )
+    zx = MOI.ScalarAffineFunction(
+        [MOI.ScalarAffineTerm(1, z), MOI.ScalarAffineTerm(-1, x)],
+        0,
+    )
+    c1 = MOI.add_constraint(src, xy, MOI.GreaterThan(18)) # x + y >= 18
+    c2 = MOI.add_constraint(src, xy, MOI.LessThan(5))     # x + y <= 5
+    c3 = MOI.add_constraint(src, zx, MOI.GreaterThan(0))  # z >= x (unrelated)
+    opt = MiniZinc.Optimizer{Int}("chuffed")
+    index_map, _ = MOI.optimize!(opt, src)
+    return opt, index_map, (c1, c2, c3)
+end
+
+# Annotation is a pure `write.jl` feature and needs no findMUS to test.
+function test_write_conflict_annotations()
+    model = MiniZinc.Model{Int}()
+    x = MOI.add_variable(model)
+    y = MOI.add_variable(model)
+    MOI.set(model, MOI.VariableName(), x, "x")
+    MOI.set(model, MOI.VariableName(), y, "y")
+    MOI.add_constraint(model, x, MOI.Interval(1, 10))
+    MOI.add_constraint(model, y, MOI.Interval(1, 10))
+    f = MOI.ScalarAffineFunction(
+        [MOI.ScalarAffineTerm(1, x), MOI.ScalarAffineTerm(1, y)],
+        0,
+    )
+    c1 = MOI.add_constraint(model, f, MOI.GreaterThan(18))
+    c2 = MOI.add_constraint(model, f, MOI.LessThan(5))
+    # Without the opt-in flag, output is unchanged (no annotations).
+    @test !occursin("::", sprint(write, model))
+    # With it, every emitted constraint carries a unique string token, and the
+    # ci -> token table is exposed via `model.ext`.
+    model.ext[:conflict_annotate] = true
+    annotated = sprint(write, model)
+    @test occursin("\"c1\"", annotated)
+    @test occursin("\"c2\"", annotated)
+    tokens = model.ext[:conflict_tokens]
+    @test length(tokens) == 2
+    @test Set(values(tokens)) == Set(["c1", "c2"])
+    @test tokens[c1] != tokens[c2]
+    return
+end
+
+# Querying participation before computing the conflict is an error.
+function test_constraint_conflict_status_before_compute()
+    opt, index_map, (c1, _, _) = _conflict_model()
+    @test MOI.get(opt, MOI.ConflictStatus()) == MOI.COMPUTE_CONFLICT_NOT_CALLED
+    @test_throws(
+        MOI.GetAttributeNotAllowed{MOI.ConstraintConflictStatus},
+        MOI.get(opt, MOI.ConstraintConflictStatus(), index_map[c1]),
+    )
+    return
+end
+
+# A missing findMUS reads as a capability gap (ArgumentError naming the
+# operation), not a computation failure. Always runnable; forces absence.
+function test_compute_conflict_unavailable()
+    withenv("JULIA_FINDMUS_MSC" => nothing) do
+        if MiniZinc._findmus_msc() !== nothing
+            return  # FindMUS_jll installed; absence cannot be simulated here.
+        end
+        opt, _, _ = _conflict_model()
+        err = try
+            MOI.compute_conflict!(opt)
+            nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        # `&&` short-circuits so a non-throw (`err === nothing`) fails cleanly
+        # rather than erroring on `nothing.msg`.
+        @test err isa ArgumentError && occursin("compute_conflict!", err.msg)
+    end
+    return
+end
+
+# A genuine findMUS failure (here a solver config whose binary is missing)
+# surfaces as an ErrorException, distinct from the missing-capability
+# ArgumentError. Needs only the MiniZinc driver, so it runs without findMUS.
+function test_compute_conflict_failure()
+    dir = mktempdir()
+    msc = joinpath(dir, "findmus.msc")
+    write(
+        msc,
+        string(
+            "{\"id\":\"org.minizinc.findmus\",\"name\":\"findMUS\",",
+            "\"executable\":\"",
+            joinpath(dir, "missing_binary"),
+            "\",",
+            "\"version\":\"0.7.0\",\"supportsMzn\":true}",
+        ),
+    )
+    withenv("JULIA_FINDMUS_MSC" => msc) do
+        opt, _, _ = _conflict_model()
+        @test_throws ErrorException MOI.compute_conflict!(opt)
+    end
+    return
+end
+
+function test_compute_conflict_found()
+    if MiniZinc._findmus_msc() === nothing
+        @info "Skipping test_compute_conflict_found: set JULIA_FINDMUS_MSC to run."
+        return
+    end
+    opt, index_map, (c1, c2, c3) = _conflict_model()
+    @test MOI.get(opt, MOI.TerminationStatus()) == MOI.INFEASIBLE
+    MOI.compute_conflict!(opt)
+    @test MOI.get(opt, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
+    @test MOI.get(opt, MOI.ConstraintConflictStatus(), index_map[c1]) ==
+          MOI.IN_CONFLICT
+    @test MOI.get(opt, MOI.ConstraintConflictStatus(), index_map[c2]) ==
+          MOI.IN_CONFLICT
+    @test MOI.get(opt, MOI.ConstraintConflictStatus(), index_map[c3]) ==
+          MOI.NOT_IN_CONFLICT
+    return
+end
+
+# A feasible model has no conflict to attribute -> NO_CONFLICT_FOUND, never
+# NO_CONFLICT_EXISTS (which would falsely assert feasibility-by-proof).
+function test_compute_conflict_feasible()
+    if MiniZinc._findmus_msc() === nothing
+        @info "Skipping test_compute_conflict_feasible: set JULIA_FINDMUS_MSC to run."
+        return
+    end
+    src = MiniZinc.Model{Int}()
+    x = MOI.add_variable(src)
+    y = MOI.add_variable(src)
+    for (v, n) in ((x, "x"), (y, "y"))
+        MOI.set(src, MOI.VariableName(), v, n)
+        MOI.add_constraint(src, v, MOI.Interval(1, 10))
+    end
+    f = MOI.ScalarAffineFunction(
+        [MOI.ScalarAffineTerm(1, x), MOI.ScalarAffineTerm(1, y)],
+        0,
+    )
+    MOI.add_constraint(src, f, MOI.GreaterThan(5))
+    opt = MiniZinc.Optimizer{Int}("chuffed")
+    MOI.optimize!(opt, src)
+    MOI.compute_conflict!(opt)
+    @test MOI.get(opt, MOI.ConflictStatus()) == MOI.NO_CONFLICT_FOUND
+    return
+end
+
 end
 
 TestMiniZinc.runtests()

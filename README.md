@@ -178,9 +178,46 @@ List of supported constraint types:
 
 List of supported model attributes:
 
+ * [`MOI.ConflictStatus()`](@ref)
  * [`MOI.NLPBlock()`](@ref)
  * [`MOI.Name()`](@ref)
  * [`MOI.ObjectiveSense()`](@ref)
+
+List of supported constraint attributes:
+
+ * [`MOI.ConstraintConflictStatus()`](@ref)
+
+## Conflicts (IIS)
+
+For an infeasible model, [`MOI.compute_conflict!`](@ref) finds a minimal
+conflicting subset of constraints (an Irreducible Infeasible Subset), after
+which [`MOI.ConstraintConflictStatus`](@ref) reports which constraints
+participate:
+
+```julia
+MOI.optimize!(model)
+if MOI.get(model, MOI.TerminationStatus()) == MOI.INFEASIBLE
+    MOI.compute_conflict!(model)
+    if MOI.get(model, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
+        for ci in conflicting_candidates
+            status = MOI.get(model, MOI.ConstraintConflictStatus(), ci)
+            # status is MOI.IN_CONFLICT or MOI.NOT_IN_CONFLICT
+        end
+    end
+end
+```
+
+This requires [findMUS](https://gitlab.com/minizinc/FindMUS), which is not part
+of the standard MiniZinc distribution. Until a `FindMUS_jll` is available, point
+MiniZinc.jl at a built `findmus.msc` via the `JULIA_FINDMUS_MSC` environment
+variable:
+
+```julia
+ENV["JULIA_FINDMUS_MSC"] = "/path/to/findmus.msc"
+```
+
+Conflicts cover modeling constraints only; variable bounds are folded into the
+variable declarations and never appear in a conflict.
 
 ## Options
 

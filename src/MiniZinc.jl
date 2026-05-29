@@ -136,5 +136,6 @@ MOI.get(::Model, ::MOI.ListOfSupportedNonlinearOperators) = _SUPPORTED_OPS
 
 include("write.jl")
 include("optimize.jl")
+include("compute_conflict.jl")
 
 end # module
