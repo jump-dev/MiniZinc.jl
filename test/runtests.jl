@@ -2102,6 +2102,78 @@ function test_write_conflict_annotations()
     return
 end
 
+# The findMUS report parser keys off the `%%%mzn-json-*` block markers and the
+# `expression_name` field. Exercise it with canned reports (no findMUS needed).
+function test_parse_findmus_tokens()
+    known = Set(["c1", "c2", "c3"])
+    report = """
+    preamble
+    %%%mzn-json-start
+    { "expression_name" : "c1" },
+    { "expression_name" : "c2" }
+    %%%mzn-json-end
+    """
+    @test MiniZinc._parse_findmus_tokens(report, known) == Set(["c1", "c2"])
+    # An `expression_name` outside the JSON block is ignored.
+    @test isempty(
+        MiniZinc._parse_findmus_tokens("\"expression_name\" : \"c1\"", known),
+    )
+    # Tokens we did not emit are ignored even inside the block.
+    foreign = "%%%mzn-json-start\n{ \"expression_name\" : \"other\" }\n%%%mzn-json-end\n"
+    @test isempty(MiniZinc._parse_findmus_tokens(foreign, known))
+    # No block markers -> nothing found.
+    @test isempty(MiniZinc._parse_findmus_tokens("no markers here", known))
+    return
+end
+
+# `_classify_conflict` is the pure decision logic of `compute_conflict!`. Drive
+# its outcomes with canned findMUS output, again without needing findMUS.
+function test_classify_conflict()
+    F, S = MOI.ScalarAffineFunction{Int}, MOI.LessThan{Int}
+    ci(i) = MOI.ConstraintIndex{F,S}(i)
+    tokens = Dict{MOI.ConstraintIndex,String}(ci(1) => "c1", ci(2) => "c2")
+    mus = "%%%mzn-json-start\n{ \"expression_name\" : \"c2\" }\n%%%mzn-json-end\n"
+    # A reported MUS -> CONFLICT_FOUND with exactly its members, trusted even
+    # when the process also reports a non-zero exit.
+    status, conflict = MiniZinc._classify_conflict(
+        mus,
+        "",
+        "findMUS exited with a non-zero status",
+        tokens,
+    )
+    @test status == MOI.CONFLICT_FOUND
+    @test conflict == Set([ci(2)])
+    # Satisfiable foreground -> NO_CONFLICT_FOUND.
+    status, conflict = MiniZinc._classify_conflict(
+        "",
+        "Error: Model is Satisfiable",
+        nothing,
+        tokens,
+    )
+    @test status == MOI.NO_CONFLICT_FOUND
+    @test isempty(conflict)
+    # Background-unsat is benign even though findMUS exits non-zero.
+    status, _ = MiniZinc._classify_conflict(
+        "",
+        "Background is not satisfiable, exiting",
+        "findMUS exited with a non-zero status",
+        tokens,
+    )
+    @test status == MOI.NO_CONFLICT_FOUND
+    # A genuine failure (no MUS, no benign marker) is an error, not a silent
+    # NO_CONFLICT_FOUND.
+    @test_throws(
+        ErrorException,
+        MiniZinc._classify_conflict(
+            "",
+            "unexpected solver crash",
+            "findMUS exited with a non-zero status",
+            tokens,
+        ),
+    )
+    return
+end
+
 # Querying participation before computing the conflict is an error.
 function test_constraint_conflict_status_before_compute()
     opt, index_map, (c1, _, _) = _conflict_model()

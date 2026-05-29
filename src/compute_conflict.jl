@@ -126,6 +126,50 @@ function _parse_findmus_tokens(output::AbstractString, known::Set{String})
     return found
 end
 
+# Map a findMUS run's captured output to a conflict status and the set of
+# conflicting constraints. Kept free of I/O (the subprocess lives in
+# `_run_findmus`) so it can be unit-tested with canned findMUS reports.
+#
+# A reported MUS is authoritative and minimal (`--no-leftover`), so its tokens
+# are mapped to constraints first and trusted even if the process later exited
+# non-zero. With no attributable MUS, findMUS reaches this cleanly for a
+# satisfiable foreground, for a conflict lying entirely in unnamed/background
+# constraints ("Background is not satisfiable"), and for a timeout whose
+# non-minimal leftover `--no-leftover` suppressed. The MiniZinc driver currently
+# returns success for all of these; we additionally recognise findMUS's own
+# messages so the result is robust to a driver that propagates findMUS's
+# (non-zero) exit. The non-conflict status is NO_CONFLICT_FOUND, never
+# NO_CONFLICT_EXISTS, which would falsely assert the model is feasible.
+function _classify_conflict(
+    output::AbstractString,
+    errors::AbstractString,
+    failure::Union{Nothing,String},
+    tokens::Dict{MOI.ConstraintIndex,String},
+)
+    conflict = Set{MOI.ConstraintIndex}()
+    conflicted = _parse_findmus_tokens(output, Set(values(tokens)))
+    for (ci, token) in tokens
+        if token in conflicted
+            push!(conflict, ci)
+        end
+    end
+    if !isempty(conflict)
+        return MOI.CONFLICT_FOUND, conflict
+    end
+    benign =
+        occursin("Model is Satisfiable", errors) ||
+        occursin("Background is not satisfiable", errors)
+    if failure === nothing || benign
+        return MOI.NO_CONFLICT_FOUND, conflict
+    end
+    return error(
+        "findMUS failed to compute a conflict: ",
+        failure,
+        ".\n",
+        strip(string(errors, "\n", output)),
+    )
+end
+
 """
     MOI.compute_conflict!(model::Optimizer)
 
@@ -174,40 +218,12 @@ function MOI.compute_conflict!(dest::Optimizer)
         delete!(dest.inner.ext, :conflict_annotate)
         delete!(dest.inner.ext, :conflict_tokens)
     end
-    # A reported MUS is authoritative and minimal (`--no-leftover`), so map its
-    # tokens to constraints first and trust it even if the process later exited
-    # non-zero.
-    conflicted = _parse_findmus_tokens(output, Set(values(tokens)))
-    for (ci, token) in tokens
-        if token in conflicted
-            push!(dest.conflict_constraints, ci)
-        end
+    status, conflict = _classify_conflict(output, errors, failure, tokens)
+    for ci in conflict
+        push!(dest.conflict_constraints, ci)
     end
-    if !isempty(dest.conflict_constraints)
-        dest.conflict_status = MOI.CONFLICT_FOUND
-        return
-    end
-    # No attributable MUS. findMUS reaches this cleanly for a satisfiable
-    # foreground, for a conflict that lies entirely in unnamed/background
-    # constraints ("Background is not satisfiable"), and for a timeout whose
-    # non-minimal leftover `--no-leftover` suppressed. The MiniZinc driver
-    # currently returns success for all of these; we additionally recognise
-    # findMUS's own messages so the result is robust to a driver that propagates
-    # findMUS's (non-zero) exit. Report NO_CONFLICT_FOUND — never
-    # NO_CONFLICT_EXISTS, which would falsely assert the model is feasible.
-    benign =
-        occursin("Model is Satisfiable", errors) ||
-        occursin("Background is not satisfiable", errors)
-    if failure === nothing || benign
-        dest.conflict_status = MOI.NO_CONFLICT_FOUND
-        return
-    end
-    return error(
-        "findMUS failed to compute a conflict: ",
-        failure,
-        ".\n",
-        strip(string(errors, "\n", output)),
-    )
+    dest.conflict_status = status
+    return
 end
 
 MOI.get(model::Optimizer, ::MOI.ConflictStatus) = model.conflict_status
@@ -222,6 +238,9 @@ function MOI.get(
             MOI.GetAttributeNotAllowed(attr, "Call `compute_conflict!` first."),
         )
     end
+    # Only annotated modeling constraints can be IN_CONFLICT; variable bounds
+    # (folded into variable declarations) and indices outside the conflict read
+    # NOT_IN_CONFLICT. See `compute_conflict!`.
     if ci in model.conflict_constraints
         return MOI.IN_CONFLICT
     end
