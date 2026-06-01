@@ -15,15 +15,11 @@
 # surfaces that string as the constraint's `expression_name` in its
 # `--output-json` report, which we map back to the originating `ConstraintIndex`.
 
-# Locate the findMUS solver configuration (`findmus.msc`). During development,
-# set `JULIA_FINDMUS_MSC` to the absolute path of a built `findmus.msc`. Returns
-# `nothing` when findMUS is unavailable.
+# Locate the findMUS solver configuration (`findmus.msc`). FindMUS_jll provides
+# it; `JULIA_FINDMUS_MSC` overrides that with a locally built config (the failure
+# test points it at a config whose binary is missing).
 function _findmus_msc()
-    msc = get(ENV, "JULIA_FINDMUS_MSC", nothing)
-    if msc !== nothing && isfile(msc)
-        return msc
-    end
-    return nothing
+    return get(ENV, "JULIA_FINDMUS_MSC", FindMUS_jll.findmus_msc)
 end
 
 # Directories to expose to the MiniZinc driver via `MZN_SOLVER_PATH` so it can
@@ -182,7 +178,7 @@ function _classify_conflict(
     # foreground (`EXIT_SUCCESS`), and a conflict lying only in unnamed/background
     # constraints. Tracked against findMUS v0.7.0; re-verify the spellings when
     # bumping FindMUS_jll (`test_compute_conflict_feasible` covers the satisfiable
-    # path once findMUS is available).
+    # path).
     benign =
         occursin("Model is Satisfiable", errors) ||
         occursin("Background is not satisfiable", errors)
@@ -214,11 +210,8 @@ The outcome is reported through [`MOI.ConflictStatus`](@ref):
   model, or could not be isolated in the time limit). This does **not** assert
   the model is feasible.
 
-findMUS must be available: set the `JULIA_FINDMUS_MSC` environment variable to a
-built `findmus.msc` (a future `FindMUS_jll` dependency can provide it). If it is
-absent, an `ArgumentError` naming `compute_conflict!` is thrown so callers can
-tell a missing capability apart from a failed computation; a genuine findMUS
-failure throws an `ErrorException`.
+findMUS is provided by the `FindMUS_jll` dependency, so no setup is required; a
+genuine findMUS failure throws an `ErrorException`.
 
 Conflicts cover modeling constraints only: MiniZinc folds variable bounds into
 variable declarations, so a bound is never reported `IN_CONFLICT`. The reported
@@ -228,15 +221,6 @@ bounded by [`MOI.TimeLimitSec`](@ref) (default 60 seconds).
 """
 function MOI.compute_conflict!(dest::Optimizer)
     msc = _findmus_msc()
-    if msc === nothing
-        throw(
-            ArgumentError(
-                "`compute_conflict!` requires findMUS, which is not available. " *
-                "Set the `JULIA_FINDMUS_MSC` environment variable to a built " *
-                "`findmus.msc` (a `FindMUS_jll` dependency can provide this).",
-            ),
-        )
-    end
     empty!(dest.conflict_constraints)
     dest.conflict_status = MOI.COMPUTE_CONFLICT_NOT_CALLED
     dest.inner.ext[:conflict_annotate] = true

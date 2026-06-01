@@ -2264,31 +2264,9 @@ function test_constraint_conflict_status_before_compute()
     return
 end
 
-# A missing findMUS reads as a capability gap (ArgumentError naming the
-# operation), not a computation failure. Always runnable; forces absence.
-function test_compute_conflict_unavailable()
-    withenv("JULIA_FINDMUS_MSC" => nothing) do
-        if MiniZinc._findmus_msc() !== nothing
-            return  # FindMUS_jll installed; absence cannot be simulated here.
-        end
-        opt, _, _ = _conflict_model()
-        err = try
-            MOI.compute_conflict!(opt)
-            nothing
-        catch e
-            e
-        end
-        @test err isa ArgumentError
-        # `&&` short-circuits so a non-throw (`err === nothing`) fails cleanly
-        # rather than erroring on `nothing.msg`.
-        @test err isa ArgumentError && occursin("compute_conflict!", err.msg)
-    end
-    return
-end
-
 # A genuine findMUS failure (here a solver config whose binary is missing)
-# surfaces as an ErrorException, distinct from the missing-capability
-# ArgumentError. Needs only the MiniZinc driver, so it runs without findMUS.
+# surfaces as an ErrorException. The bogus config is supplied via
+# `JULIA_FINDMUS_MSC`, so the test needs only the MiniZinc driver, not findMUS.
 function test_compute_conflict_failure()
     dir = mktempdir()
     msc = joinpath(dir, "findmus.msc")
@@ -2310,10 +2288,6 @@ function test_compute_conflict_failure()
 end
 
 function test_compute_conflict_found()
-    if MiniZinc._findmus_msc() === nothing
-        @info "Skipping test_compute_conflict_found: set JULIA_FINDMUS_MSC to run."
-        return
-    end
     opt, index_map, (c1, c2, c3) = _conflict_model()
     @test MOI.get(opt, MOI.TerminationStatus()) == MOI.INFEASIBLE
     MOI.compute_conflict!(opt)
@@ -2330,10 +2304,6 @@ end
 # A feasible model has no conflict to attribute -> NO_CONFLICT_FOUND, never
 # NO_CONFLICT_EXISTS (which would falsely assert feasibility-by-proof).
 function test_compute_conflict_feasible()
-    if MiniZinc._findmus_msc() === nothing
-        @info "Skipping test_compute_conflict_feasible: set JULIA_FINDMUS_MSC to run."
-        return
-    end
     src = MiniZinc.Model{Int}()
     x = MOI.add_variable(src)
     y = MOI.add_variable(src)

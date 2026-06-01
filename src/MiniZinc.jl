@@ -6,6 +6,7 @@
 module MiniZinc
 
 import Chuffed_jll
+import FindMUS_jll
 import MathOptInterface as MOI
 import MiniZinc_jll
 

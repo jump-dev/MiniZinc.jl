@@ -210,14 +210,9 @@ if MOI.get(model, MOI.TerminationStatus()) == MOI.INFEASIBLE
 end
 ```
 
-This requires [findMUS](https://gitlab.com/minizinc/FindMUS), which is not part
-of the standard MiniZinc distribution. Until a `FindMUS_jll` is available, point
-MiniZinc.jl at a built `findmus.msc` via the `JULIA_FINDMUS_MSC` environment
-variable:
-
-```julia
-ENV["JULIA_FINDMUS_MSC"] = "/path/to/findmus.msc"
-```
+This uses [findMUS](https://gitlab.com/minizinc/FindMUS), which is not part of
+the standard MiniZinc distribution; it is supplied by the `FindMUS_jll`
+dependency, so no extra setup is required.
 
 Conflicts cover modeling constraints only; variable bounds are folded into the
 variable declarations and never appear in a conflict.
