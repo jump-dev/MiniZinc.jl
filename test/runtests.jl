@@ -1202,6 +1202,38 @@ function test_moi_tests()
     return
 end
 
+function test_moi_conflict_tests()
+    model = MOI.Utilities.CachingOptimizer(
+        MOI.Utilities.Model{Int}(),
+        MiniZinc.Optimizer{Int}("chuffed"),
+    )
+    config = MOI.Test.Config(Int)
+    MOI.Test.runtests(
+        model,
+        config;
+        include = String["test_solve_conflict_"],
+        exclude = Union{String,Regex}[
+            # Each of these asserts that a variable bound or integrality is itself
+            # IN_CONFLICT. MiniZinc folds variable bounds and integrality into the
+            # variable declaration, so they have no constraint line to annotate and
+            # are never reported IN_CONFLICT (such conflicts surface as
+            # NO_CONFLICT_FOUND). `affine_affine`, `EqualTo`, and `NOT_IN_CONFLICT`
+            # fail on their `x >= 0` / `y >= 0` bound assertions, not the affine
+            # ones; `zeroone`/`zeroone_2` hinge on a `ZeroOne` integrality.
+            "test_solve_conflict_bound_bound",
+            "test_solve_conflict_invalid_interval",
+            "test_solve_conflict_affine_affine",
+            "test_solve_conflict_EqualTo",
+            "test_solve_conflict_NOT_IN_CONFLICT",
+            r"test_solve_conflict_zeroone",  # zeroone and zeroone_2
+            # findMUS proves unsatisfiability, not feasibility, so a feasible model
+            # yields NO_CONFLICT_FOUND, not the NO_CONFLICT_EXISTS asserted here.
+            "test_solve_conflict_feasible",
+        ],
+    )
+    return
+end
+
 function test_model_filename()
     model = MOI.Utilities.Model{Int}()
     x, x_int = MOI.add_constrained_variable(model, MOI.Integer())
