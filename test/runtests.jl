@@ -2242,7 +2242,10 @@ end
 function test_findmus_solver_path()
     sep = Sys.iswindows() ? ';' : ':'
     msc = joinpath(@__DIR__, "findmus.msc")
-    base = withenv(() -> MiniZinc._findmus_solver_path(msc), "MZN_SOLVER_PATH" => nothing)
+    base = withenv(
+        () -> MiniZinc._findmus_solver_path(msc),
+        "MZN_SOLVER_PATH" => nothing,
+    )
     @test dirname(abspath(msc)) in split(base, sep)
     @test !("/custom/solver/dir" in split(base, sep))
     extended = withenv(
