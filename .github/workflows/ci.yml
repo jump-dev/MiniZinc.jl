@@ -18,6 +18,14 @@ jobs:
         version: ['1.10', '1']  # Test against the minimum supported version and current minor release
         os: [ubuntu-latest, macOS-latest]  # MiniZinc_jll broken on windows-latest
         arch: [x64]
+        exclude:
+          # MiniZinc_jll 2.9.5 (required by FindMUS_jll) bundles HiGHS_jll 1.13.1, whose
+          # Linux binary segfaults under Julia 1.10 in test_highs_feasibility. The crash
+          # reproduces on ubuntu-latest + 1.10 but not on macOS + 1.10 or ubuntu + Julia 1.11;
+          # it is an upstream HiGHS/MiniZinc binary bug, unrelated to this package. The 1.10
+          # floor stays covered by the macOS job.
+          - os: ubuntu-latest
+            version: '1.10'
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
