@@ -192,14 +192,25 @@ List of supported constraint attributes:
 For an infeasible model, [`MOI.compute_conflict!`](@ref) finds a minimal
 conflicting subset of constraints (an Irreducible Inconsistent Subsystem),
 after which [`MOI.ConstraintConflictStatus`](@ref) reports which constraints
-participate. Using the `model` from the example above:
+participate. For example, this model is infeasible because `x[1] + x[2]` cannot
+be both `>= 18` and `<= 5`:
 
 ```julia
+model = MOI.Utilities.CachingOptimizer(
+    MiniZinc.Model{Int}(),
+    MiniZinc.Optimizer{Int}("chuffed"),
+)
+x = MOI.add_variables(model, 2)
+MOI.add_constraint.(model, x, MOI.Interval(1, 10))
+f = 1 * x[1] + 1 * x[2]
+MOI.add_constraint(model, f, MOI.GreaterThan(18))  # x[1] + x[2] >= 18
+MOI.add_constraint(model, f, MOI.LessThan(5))       # x[1] + x[2] <= 5
 MOI.optimize!(model)
 if MOI.get(model, MOI.TerminationStatus()) == MOI.INFEASIBLE
     MOI.compute_conflict!(model)
     if MOI.get(model, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
         # Query each constraint you added to `model` for its participation.
+        # Variable bounds always read NOT_IN_CONFLICT (see below).
         for (F, S) in MOI.get(model, MOI.ListOfConstraintTypesPresent())
             for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
                 status = MOI.get(model, MOI.ConstraintConflictStatus(), ci)

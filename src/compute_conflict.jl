@@ -188,8 +188,7 @@ function _classify_conflict(
     return error(
         "findMUS failed to compute a conflict: ",
         failure,
-        ". If findMUS timed out, raise the limit with `MOI.TimeLimitSec`; ",
-        "otherwise see the README for findMUS setup.\n",
+        ". If findMUS timed out, raise the limit with `MOI.TimeLimitSec`.\n",
         strip(string(errors, "\n", output)),
     )
 end
@@ -218,6 +217,9 @@ variable declarations, so a bound is never reported `IN_CONFLICT`. The reported
 conflict is guaranteed minimal; on timeout no conflict is reported rather than a
 possibly non-minimal one. Conflict analysis uses the Chuffed subsolver and is
 bounded by [`MOI.TimeLimitSec`](@ref) (default 60 seconds).
+
+See also [`MOI.ConflictStatus`](@ref) and
+[`MOI.ConstraintConflictStatus`](@ref).
 """
 function MOI.compute_conflict!(dest::Optimizer)
     msc = _findmus_msc()

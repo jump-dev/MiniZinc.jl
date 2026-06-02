@@ -2194,6 +2194,14 @@ function test_parse_findmus_tokens()
     @test isempty(MiniZinc._parse_findmus_tokens(foreign, known))
     # No block markers -> nothing found.
     @test isempty(MiniZinc._parse_findmus_tokens("no markers here", known))
+    # Two blocks union their members (documented behaviour of the scanner).
+    two =
+        "%%%mzn-json-start\n{\"expression_name\": \"c1\"}\n%%%mzn-json-end\n" *
+        "%%%mzn-json-start\n{\"expression_name\": \"c2\"}\n%%%mzn-json-end\n"
+    @test MiniZinc._parse_findmus_tokens(two, known) == Set(["c1", "c2"])
+    # A stray end marker before any start is a no-op (the flag is a boolean).
+    stray = "%%%mzn-json-end\n{\"expression_name\": \"c1\"}\n"
+    @test isempty(MiniZinc._parse_findmus_tokens(stray, known))
     return
 end
 
@@ -2271,6 +2279,12 @@ function test_classify_conflict()
             tokens,
         ),
     )
+    # A clean findMUS exit (failure === nothing) with annotatable constraints
+    # but no attributable MUS and no benign marker is NO_CONFLICT_FOUND, not an
+    # error — the common "no MUS could be isolated" outcome.
+    status, conflict = MiniZinc._classify_conflict("", "", nothing, tokens)
+    @test status == MOI.NO_CONFLICT_FOUND
+    @test isempty(conflict)
     # An empty token table (a model with no annotatable constraints, e.g. only
     # variable bounds, which fold into declarations) can never yield
     # CONFLICT_FOUND, whatever the report contains.
@@ -2330,6 +2344,18 @@ function test_compute_conflict_found()
           MOI.IN_CONFLICT
     @test MOI.get(opt, MOI.ConstraintConflictStatus(), index_map[c3]) ==
           MOI.NOT_IN_CONFLICT
+    # Re-solving the same optimizer must clear the stale conflict; otherwise a
+    # later `ConflictStatus` query would report the previous model's conflict.
+    feasible = MiniZinc.Model{Int}()
+    v = MOI.add_variable(feasible)
+    MOI.set(feasible, MOI.VariableName(), v, "v")
+    MOI.add_constraint(feasible, v, MOI.Interval(1, 10))
+    MOI.optimize!(opt, feasible)
+    @test MOI.get(opt, MOI.ConflictStatus()) == MOI.COMPUTE_CONFLICT_NOT_CALLED
+    @test_throws(
+        MOI.GetAttributeNotAllowed{MOI.ConstraintConflictStatus},
+        MOI.get(opt, MOI.ConstraintConflictStatus(), index_map[c1]),
+    )
     return
 end
 

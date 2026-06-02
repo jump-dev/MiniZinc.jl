@@ -225,6 +225,9 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     time_start = time()
     MOI.empty!(dest.inner)
     empty!(dest.primal_solutions)
+    # A re-solve invalidates any conflict computed for the previous model.
+    dest.conflict_status = MOI.COMPUTE_CONFLICT_NOT_CALLED
+    empty!(dest.conflict_constraints)
     index_map = MOI.copy_to(dest.inner, src)
     ret = _run_minizinc(dest)
     if !isempty(ret)
