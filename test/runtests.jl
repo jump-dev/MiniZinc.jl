@@ -2235,6 +2235,25 @@ function test_findmus_command()
     return
 end
 
+# `_findmus_solver_path` builds the `MZN_SOLVER_PATH` exposed to the driver. The
+# findMUS/Chuffed directories come from the environment, so just check that a
+# pre-existing `MZN_SOLVER_PATH` entry is preserved (and absent otherwise). No
+# findMUS needed: the function only manipulates path strings.
+function test_findmus_solver_path()
+    sep = Sys.iswindows() ? ';' : ':'
+    msc = joinpath(@__DIR__, "findmus.msc")
+    base = withenv(() -> MiniZinc._findmus_solver_path(msc), "MZN_SOLVER_PATH" => nothing)
+    @test dirname(abspath(msc)) in split(base, sep)
+    @test !("/custom/solver/dir" in split(base, sep))
+    extended = withenv(
+        () -> MiniZinc._findmus_solver_path(msc),
+        "MZN_SOLVER_PATH" => "/custom/solver/dir",
+    )
+    @test "/custom/solver/dir" in split(extended, sep)
+    @test dirname(abspath(msc)) in split(extended, sep)
+    return
+end
+
 # `_classify_conflict` is the pure decision logic of `compute_conflict!`. Drive
 # its outcomes with canned findMUS output, again without needing findMUS.
 function test_classify_conflict()
@@ -2377,8 +2396,9 @@ function test_compute_conflict_found()
     return
 end
 
-# A feasible model has no conflict to attribute -> NO_CONFLICT_FOUND, never
-# NO_CONFLICT_EXISTS (which would falsely assert feasibility-by-proof).
+# findMUS proves a feasible model satisfiable, a genuine feasibility proof, so
+# its conflict status is NO_CONFLICT_EXISTS (not NO_CONFLICT_FOUND, which is
+# reserved for "no conflict could be attributed" without such a proof).
 function test_compute_conflict_feasible()
     src = MiniZinc.Model{Int}()
     x = MOI.add_variable(src)
