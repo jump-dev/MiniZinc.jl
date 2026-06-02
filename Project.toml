@@ -12,8 +12,8 @@ MiniZinc_jll = "3677d96b-3d39-5184-a844-8e8b2839af35"
 [compat]
 Chuffed_jll = "=0.10.4, =0.13.2"
 FindMUS_jll = "=0.7.0"
-MathOptInterface = "1.21"
-MiniZinc_jll = "=2.7.6, =2.8.5, =2.9.3, =2.9.5"
+MathOptInterface = "1.43"
+MiniZinc_jll = "=2.9.5"
 Test = "1"
 julia = "1.10"
 
