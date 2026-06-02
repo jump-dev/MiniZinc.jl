@@ -129,19 +129,25 @@ end
 # `_findmus_cmd` always passes), keeping only tokens we emitted. `eachmatch`
 # scans each line for every `expression_name`, so a compacted block (more than
 # one field on a line, as `--json-stream` would emit) is not under-reported.
+# A block's tokens are committed only when its closing `%%%mzn-json-end` is seen:
+# a truncated run (e.g. the backstop killed the driver mid-report) leaves an
+# unterminated block whose partial tokens must not be read as a conflict.
 # `-n 1` + `--no-leftover` yield at most one block; multiple would simply union.
 function _parse_findmus_tokens(output::AbstractString, known::Set{String})
     found = Set{String}()
+    pending = Set{String}()
     in_block = false
     for line in eachline(IOBuffer(output))
         if occursin("%%%mzn-json-start", line)
             in_block = true
+            empty!(pending)
         elseif occursin("%%%mzn-json-end", line)
+            in_block && union!(found, pending)
             in_block = false
         elseif in_block
             for m in eachmatch(r"\"expression_name\"\s*:\s*\"([^\"]*)\"", line)
                 if m[1] in known
-                    push!(found, m[1])
+                    push!(pending, m[1])
                 end
             end
         end
@@ -155,14 +161,13 @@ end
 #
 # A reported MUS is authoritative and minimal (`--no-leftover`), so its tokens
 # are mapped to constraints first and trusted even if the process later exited
-# non-zero. With no attributable MUS, findMUS reaches this cleanly for a
-# satisfiable foreground, for a conflict lying entirely in unnamed/background
-# constraints ("Background is not satisfiable"), and for a timeout whose
-# non-minimal leftover `--no-leftover` suppressed. The MiniZinc driver currently
-# returns success for all of these; we additionally recognise findMUS's own
-# messages so the result is robust to a driver that propagates findMUS's
-# (non-zero) exit. The non-conflict status is NO_CONFLICT_FOUND, never
-# NO_CONFLICT_EXISTS, which would falsely assert the model is feasible.
+# non-zero. Otherwise the outcome turns on findMUS's own messages (recognised so
+# the result is robust to a driver that propagates findMUS's non-zero exit):
+# "Model is Satisfiable" proves the model feasible (NO_CONFLICT_EXISTS), while a
+# background-only conflict ("Background is not satisfiable") or a clean exit that
+# isolated no MUS (e.g. a timeout whose non-minimal leftover `--no-leftover`
+# suppressed) is NO_CONFLICT_FOUND — never NO_CONFLICT_EXISTS, which would
+# falsely assert feasibility for a model findMUS did not prove satisfiable.
 function _classify_conflict(
     output::AbstractString,
     errors::AbstractString,
@@ -179,17 +184,24 @@ function _classify_conflict(
     if !isempty(conflict)
         return MOI.CONFLICT_FOUND, conflict
     end
-    # findMUS's two benign non-conflict messages on stderr: a satisfiable
-    # foreground (`EXIT_SUCCESS`), and a conflict lying only in unnamed/background
-    # constraints. Tracked against findMUS v0.7.0; re-verify the spellings when
-    # bumping FindMUS_jll (`test_compute_conflict_feasible` covers the satisfiable
-    # path).
-    benign =
-        occursin("Model is Satisfiable", errors) ||
-        occursin("Background is not satisfiable", errors)
-    if failure === nothing || benign
+    # findMUS's initial check proved the whole model satisfiable: a genuine
+    # feasibility proof, so the model has no conflict. Tracked against findMUS
+    # v0.7.0; re-verify the message spellings when bumping FindMUS_jll
+    # (`test_compute_conflict_feasible` covers this path).
+    if occursin("Model is Satisfiable", errors)
+        return MOI.NO_CONFLICT_EXISTS, conflict
+    end
+    # No attributable named MUS and no proof of feasibility: the conflict lies
+    # only in unnamed/background constraints ("Background is not satisfiable"), or
+    # findMUS exited cleanly without isolating one (e.g. a timeout whose
+    # non-minimal leftover `--no-leftover` suppressed). Report NO_CONFLICT_FOUND,
+    # never NO_CONFLICT_EXISTS, which would falsely assert feasibility.
+    if failure === nothing || occursin("Background is not satisfiable", errors)
         return MOI.NO_CONFLICT_FOUND, conflict
     end
+    # A genuine findMUS failure (could not run, crashed, or non-zero exit with no
+    # recognised outcome). Throw a descriptive ErrorException carrying the reason
+    # and captured output so a caller can report it to the user.
     return error(
         "findMUS failed to compute a conflict: ",
         failure,
@@ -209,13 +221,17 @@ for [`MOI.ConstraintConflictStatus`](@ref). Call after `optimize!` returns
 The outcome is reported through [`MOI.ConflictStatus`](@ref):
 - `CONFLICT_FOUND` — a minimal conflict was found; its members read
   `IN_CONFLICT` from `ConstraintConflictStatus`.
+- `NO_CONFLICT_EXISTS` — findMUS proved the model satisfiable, so no conflict
+  exists.
 - `NO_CONFLICT_FOUND` — no conflict could be attributed to the model's
   constraints (the conflict involves only variable bounds, lies outside the
   model, or could not be isolated in the time limit). This does **not** assert
   the model is feasible.
 
-findMUS is provided by the `FindMUS_jll` dependency, so no setup is required; a
-genuine findMUS failure throws an `ErrorException`.
+findMUS is provided by the `FindMUS_jll` dependency, so no setup is required. A
+genuine findMUS failure throws an `ErrorException` whose message carries the
+findMUS reason and captured output, so a caller (e.g. a solver service) can
+surface it to the user.
 
 Conflicts cover modeling constraints only: MiniZinc folds variable bounds into
 variable declarations, so a bound is never reported `IN_CONFLICT`. The reported

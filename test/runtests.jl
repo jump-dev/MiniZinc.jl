@@ -1226,9 +1226,6 @@ function test_moi_conflict_tests()
             "test_solve_conflict_EqualTo",
             "test_solve_conflict_NOT_IN_CONFLICT",
             r"test_solve_conflict_zeroone",  # zeroone and zeroone_2
-            # findMUS proves unsatisfiability, not feasibility, so a feasible model
-            # yields NO_CONFLICT_FOUND, not the NO_CONFLICT_EXISTS asserted here.
-            "test_solve_conflict_feasible",
         ],
     )
     return
@@ -2202,6 +2199,10 @@ function test_parse_findmus_tokens()
     # A stray end marker before any start is a no-op (the flag is a boolean).
     stray = "%%%mzn-json-end\n{\"expression_name\": \"c1\"}\n"
     @test isempty(MiniZinc._parse_findmus_tokens(stray, known))
+    # A truncated block (start with no closing end marker, e.g. findMUS was
+    # killed mid-report) commits nothing: partial output is not a conflict.
+    truncated = "%%%mzn-json-start\n{\"expression_name\": \"c1\"}\n"
+    @test isempty(MiniZinc._parse_findmus_tokens(truncated, known))
     return
 end
 
@@ -2251,14 +2252,15 @@ function test_classify_conflict()
     )
     @test status == MOI.CONFLICT_FOUND
     @test conflict == Set([ci(2)])
-    # Satisfiable foreground -> NO_CONFLICT_FOUND.
+    # findMUS proving the model satisfiable is a feasibility proof ->
+    # NO_CONFLICT_EXISTS.
     status, conflict = MiniZinc._classify_conflict(
         "",
         "Error: Model is Satisfiable",
         nothing,
         tokens,
     )
-    @test status == MOI.NO_CONFLICT_FOUND
+    @test status == MOI.NO_CONFLICT_EXISTS
     @test isempty(conflict)
     # Background-unsat is benign even though findMUS exits non-zero.
     status, _ = MiniZinc._classify_conflict(
@@ -2393,7 +2395,7 @@ function test_compute_conflict_feasible()
     opt = MiniZinc.Optimizer{Int}("chuffed")
     MOI.optimize!(opt, src)
     MOI.compute_conflict!(opt)
-    @test MOI.get(opt, MOI.ConflictStatus()) == MOI.NO_CONFLICT_FOUND
+    @test MOI.get(opt, MOI.ConflictStatus()) == MOI.NO_CONFLICT_EXISTS
     return
 end
 
