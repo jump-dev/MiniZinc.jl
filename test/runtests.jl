@@ -2344,6 +2344,21 @@ function test_compute_conflict_found()
           MOI.IN_CONFLICT
     @test MOI.get(opt, MOI.ConstraintConflictStatus(), index_map[c3]) ==
           MOI.NOT_IN_CONFLICT
+    # Exactly one conflict is reported, so `ConflictCount` is 1 and an
+    # out-of-range conflict index or an invalid constraint errors rather than
+    # silently returning a status.
+    @test MOI.get(opt, MOI.ConflictCount()) == 1
+    @test_throws(
+        MOI.ConflictIndexBoundsError{MOI.ConstraintConflictStatus},
+        MOI.get(opt, MOI.ConstraintConflictStatus(2), index_map[c1]),
+    )
+    bad = MOI.ConstraintIndex{MOI.ScalarAffineFunction{Int},MOI.LessThan{Int}}(
+        987654,
+    )
+    @test_throws(
+        MOI.InvalidIndex,
+        MOI.get(opt, MOI.ConstraintConflictStatus(), bad),
+    )
     # Re-solving the same optimizer must clear the stale conflict; otherwise a
     # later `ConflictStatus` query would report the previous model's conflict.
     feasible = MiniZinc.Model{Int}()
@@ -2352,6 +2367,7 @@ function test_compute_conflict_found()
     MOI.add_constraint(feasible, v, MOI.Interval(1, 10))
     MOI.optimize!(opt, feasible)
     @test MOI.get(opt, MOI.ConflictStatus()) == MOI.COMPUTE_CONFLICT_NOT_CALLED
+    @test MOI.get(opt, MOI.ConflictCount()) == 0
     @test_throws(
         MOI.GetAttributeNotAllowed{MOI.ConstraintConflictStatus},
         MOI.get(opt, MOI.ConstraintConflictStatus(), index_map[c1]),

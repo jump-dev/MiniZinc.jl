@@ -88,7 +88,12 @@ function _run_findmus(dest::Optimizer, msc::AbstractString)
                 pipeline(cmd; stdout = out_file, stderr = err_file);
                 wait = false,
             )
-            # findMUS's own `-t` should fire first; this backstops a hung process.
+            # findMUS's own `-t` should fire first; this backstops a hung driver.
+            # `kill` targets the `minizinc` process; any findMUS/Chuffed children
+            # are independently bounded by `-t` and `--subsolver-timelimit`, so a
+            # driver-only kill cannot leave an unbounded process behind. The output
+            # captured below is only trusted when a complete MUS block is present,
+            # which this killed path never produces.
             timer = Timer(overall_ms / 1_000 + 30.0) do _t
                 if process_running(proc)
                     killed[] = true
@@ -242,6 +247,11 @@ end
 
 MOI.get(model::Optimizer, ::MOI.ConflictStatus) = model.conflict_status
 
+# findMUS reports a single minimal conflict (`-n 1`), so there is at most one.
+function MOI.get(model::Optimizer, ::MOI.ConflictCount)
+    return model.conflict_status == MOI.CONFLICT_FOUND ? 1 : 0
+end
+
 function MOI.get(
     model::Optimizer,
     attr::MOI.ConstraintConflictStatus,
@@ -252,6 +262,10 @@ function MOI.get(
             MOI.GetAttributeNotAllowed(attr, "Call `compute_conflict!` first."),
         )
     end
+    # `attr.conflict_index` must name one of the (at most one) computed
+    # conflicts, and `ci` must belong to this model.
+    MOI.check_conflict_index_bounds(model, attr)
+    MOI.throw_if_not_valid(model.inner, ci)
     # Only annotated modeling constraints can be IN_CONFLICT; variable bounds
     # (folded into variable declarations) and indices outside the conflict read
     # NOT_IN_CONFLICT. See `compute_conflict!`.
