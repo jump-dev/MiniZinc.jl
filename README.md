@@ -228,6 +228,10 @@ dependency, so no extra setup is required.
 Conflicts cover modeling constraints only; variable bounds are folded into the
 variable declarations and never appear in a conflict.
 
+Conflict analysis always uses the Chuffed subsolver, regardless of the solver
+passed to `MiniZinc.Optimizer`, so a model outside Chuffed's support (for
+example, one with floating-point variables) reports `NO_CONFLICT_FOUND`.
+
 ## Options
 
 Set options using [`MOI.RawOptimizerAttribute`](@ref) in MOI or

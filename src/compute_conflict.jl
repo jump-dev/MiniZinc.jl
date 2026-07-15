@@ -19,7 +19,11 @@
 # it; `JULIA_FINDMUS_MSC` overrides that with a locally built config (the failure
 # test points it at a config whose binary is missing).
 function _findmus_msc()
-    return get(ENV, "JULIA_FINDMUS_MSC", FindMUS_jll.findmus_msc)
+    # `abspath` so the config still resolves after the findMUS subprocess is run
+    # with its working directory set to the temp dir (a relative
+    # `JULIA_FINDMUS_MSC` would otherwise break); `FindMUS_jll.findmus_msc` is
+    # already absolute.
+    return abspath(get(ENV, "JULIA_FINDMUS_MSC", FindMUS_jll.findmus_msc))
 end
 
 # Directories to expose to the MiniZinc driver via `MZN_SOLVER_PATH` so it can
@@ -41,8 +45,8 @@ end
 # The findMUS invocation. `--named-only` scopes the search to our annotated
 # constraints; `-g --soft-defines` keep bound/functional constraints from being
 # absorbed into variable domains (otherwise they vanish from the MUS);
-# `--no-leftover` suppresses any non-minimal candidate emitted on timeout, so any
-# reported MUS is guaranteed minimal; `--paramset mzn` selects MiniZinc-level
+# `--no-leftover` suppresses the non-minimal candidate findMUS would otherwise
+# emit if the overall search times out; `--paramset mzn` selects MiniZinc-level
 # output so each member's annotation surfaces as its `expression_name`. Kept a
 # pure builder so the exact flag set stays unit-testable without findMUS present.
 function _findmus_cmd(
@@ -80,9 +84,18 @@ function _run_findmus(dest::Optimizer, msc::AbstractString)
     killed = Ref(false)
     failure = try
         _minizinc_exe() do exe
-            cmd = addenv(
-                _findmus_cmd(exe, msc, filename, overall_ms, sub_ms),
-                "MZN_SOLVER_PATH" => solver_path,
+            # Run in `dir` so findMUS's failure artifact lands in the temp
+            # directory rather than the caller's working directory: when a
+            # subsolver check errors (e.g. a float model, which the Chuffed
+            # subsolver cannot handle) findMUS dumps a
+            # `FINDMUS_failed_subproblem.fzn` into its working directory.
+            # `filename`, `out_file`, and `err_file` are already absolute.
+            cmd = Cmd(
+                addenv(
+                    _findmus_cmd(exe, msc, filename, overall_ms, sub_ms),
+                    "MZN_SOLVER_PATH" => solver_path,
+                );
+                dir = dir,
             )
             proc = run(
                 pipeline(cmd; stdout = out_file, stderr = err_file);
@@ -92,8 +105,9 @@ function _run_findmus(dest::Optimizer, msc::AbstractString)
             # `kill` targets the `minizinc` process; any findMUS/Chuffed children
             # are independently bounded by `-t` and `--subsolver-timelimit`, so a
             # driver-only kill cannot leave an unbounded process behind. The output
-            # captured below is only trusted when a complete MUS block is present,
-            # which this killed path never produces.
+            # captured below is only trusted when a complete MUS block is present;
+            # a kill mid-report cannot fabricate one (`_parse_findmus_tokens`
+            # ignores an unterminated block).
             timer = Timer(overall_ms / 1_000 + 30.0) do _t
                 if process_running(proc)
                     killed[] = true
@@ -159,10 +173,11 @@ end
 # conflicting constraints. Kept free of I/O (the subprocess lives in
 # `_run_findmus`) so it can be unit-tested with canned findMUS reports.
 #
-# A reported MUS is authoritative and minimal (`--no-leftover`), so its tokens
-# are mapped to constraints first and trusted even if the process later exited
-# non-zero. Otherwise the outcome turns on findMUS's own messages (recognised so
-# the result is robust to a driver that propagates findMUS's non-zero exit):
+# A reported MUS is authoritative (its members form an infeasible set), so its
+# tokens are mapped to constraints first and trusted even if the process later
+# exited non-zero. Otherwise the outcome turns on findMUS's own messages
+# (recognised so the result is robust to a driver that propagates findMUS's
+# non-zero exit):
 # "Model is Satisfiable" proves the model feasible (NO_CONFLICT_EXISTS), while a
 # background-only conflict ("Background is not satisfiable") or a clean exit that
 # isolated no MUS (e.g. a timeout whose non-minimal leftover `--no-leftover`
@@ -235,9 +250,12 @@ surface it to the user.
 
 Conflicts cover modeling constraints only: MiniZinc folds variable bounds into
 variable declarations, so a bound is never reported `IN_CONFLICT`. The reported
-conflict is guaranteed minimal; on timeout no conflict is reported rather than a
-possibly non-minimal one. Conflict analysis uses the Chuffed subsolver and is
-bounded by [`MOI.TimeLimitSec`](@ref) (default 60 seconds).
+conflict is the minimal set findMUS isolates; on timeout no conflict is reported
+rather than a possibly non-minimal one. Conflict analysis always uses the Chuffed
+subsolver, regardless of the solver the `Optimizer` was constructed with (so a
+model outside Chuffed's support, for example one with floating-point variables,
+reports `NO_CONFLICT_FOUND`), and is bounded by [`MOI.TimeLimitSec`](@ref)
+(default 60 seconds).
 
 See also [`MOI.ConflictStatus`](@ref) and
 [`MOI.ConstraintConflictStatus`](@ref).
