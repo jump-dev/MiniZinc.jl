@@ -101,13 +101,17 @@ function _run_findmus(dest::Optimizer, msc::AbstractString)
                 pipeline(cmd; stdout = out_file, stderr = err_file);
                 wait = false,
             )
-            # findMUS's own `-t` should fire first; this backstops a hung driver.
-            # `kill` targets the `minizinc` process; any findMUS/Chuffed children
-            # are independently bounded by `-t` and `--subsolver-timelimit`, so a
-            # driver-only kill cannot leave an unbounded process behind. The output
-            # captured below is only trusted when a complete MUS block is present;
-            # a kill mid-report cannot fabricate one (`_parse_findmus_tokens`
-            # ignores an unterminated block).
+            # Wall-clock backstop. findMUS's `-t` cannot bound wall time: it is
+            # only checked between subsolver calls, so it neither preempts an
+            # in-flight Chuffed check (each bounded by `--subsolver-timelimit`)
+            # nor covers the flatten and the two initial UNSAT/background checks
+            # that run before its deadline loop. So this Timer is what actually
+            # enforces `MOI.TimeLimitSec`. `kill` targets the `minizinc`
+            # process; `--subsolver-timelimit` independently bounds each Chuffed
+            # SAT check, so the kill cannot leave an unbounded child behind. The
+            # output captured below is only trusted when a complete MUS block is
+            # present; a kill mid-report cannot fabricate one
+            # (`_parse_findmus_tokens` ignores an unterminated block).
             timer = Timer(overall_ms / 1_000 + 30.0) do _t
                 if process_running(proc)
                     killed[] = true
