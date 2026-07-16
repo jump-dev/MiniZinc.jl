@@ -2200,7 +2200,7 @@ function test_parse_findmus_tokens()
     stray = "%%%mzn-json-end\n{\"expression_name\": \"c1\"}\n"
     @test isempty(MiniZinc._parse_findmus_tokens(stray, known))
     # A truncated block (start with no closing end marker, e.g. findMUS was
-    # killed mid-report) commits nothing: partial output is not a conflict.
+    # interrupted mid-report) commits nothing: partial output is not a conflict.
     truncated = "%%%mzn-json-start\n{\"expression_name\": \"c1\"}\n"
     @test isempty(MiniZinc._parse_findmus_tokens(truncated, known))
     return

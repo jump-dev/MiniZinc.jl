@@ -81,7 +81,6 @@ function _run_findmus(dest::Optimizer, msc::AbstractString)
     solver_path = _findmus_solver_path(msc)
     out_file = joinpath(dir, "stdout.txt")
     err_file = joinpath(dir, "stderr.txt")
-    killed = Ref(false)
     failure = try
         _minizinc_exe() do exe
             # Run in `dir` so findMUS's failure artifact lands in the temp
@@ -97,41 +96,13 @@ function _run_findmus(dest::Optimizer, msc::AbstractString)
                 );
                 dir = dir,
             )
-            proc = run(
-                pipeline(cmd; stdout = out_file, stderr = err_file);
-                wait = false,
-            )
-            # Wall-clock backstop. findMUS's `-t` cannot bound wall time: it is
-            # only checked between subsolver calls, so it neither preempts an
-            # in-flight Chuffed check (each bounded by `--subsolver-timelimit`)
-            # nor covers the flatten and the two initial UNSAT/background checks
-            # that run before its deadline loop. So this Timer is what actually
-            # enforces `MOI.TimeLimitSec`. `kill` targets the `minizinc`
-            # process; `--subsolver-timelimit` independently bounds each Chuffed
-            # SAT check, so the kill cannot leave an unbounded child behind. The
-            # output captured below is only trusted when a complete MUS block is
-            # present; a kill mid-report cannot fabricate one
-            # (`_parse_findmus_tokens` ignores an unterminated block).
-            timer = Timer(overall_ms / 1_000 + 30.0) do _t
-                if process_running(proc)
-                    killed[] = true
-                    kill(proc)
-                end
-            end
-            try
-                wait(proc)
-            finally
-                close(timer)
-            end
-            # A process that exited cleanly is a success even if the backstop
-            # timer fired in the narrow race before `wait` returned (`kill` on an
-            # already-finished process is a no-op).
-            if success(proc)
-                return nothing
-            elseif killed[]
-                return "findMUS exceeded the wall-clock limit and was terminated"
-            end
-            return "findMUS exited with a non-zero status"
+            # findMUS bounds its own runtime with `-t` (overall) and
+            # `--subsolver-timelimit` (per subsolver call), so `MOI.TimeLimitSec`
+            # is best-effort: `-t` is checked only between subsolver calls, so an
+            # in-flight check or the upfront flatten can overrun it.
+            pipe = pipeline(cmd; stdout = out_file, stderr = err_file)
+            return success(pipe) ? nothing :
+                   "findMUS exited with a non-zero status"
         end
     catch err
         err isa InterruptException && rethrow(err)
@@ -148,7 +119,7 @@ end
 # scans each line for every `expression_name`, so a compacted block (more than
 # one field on a line, as `--json-stream` would emit) is not under-reported.
 # A block's tokens are committed only when its closing `%%%mzn-json-end` is seen:
-# a truncated run (e.g. the backstop killed the driver mid-report) leaves an
+# a truncated run (e.g. findMUS was interrupted mid-report) leaves an
 # unterminated block whose partial tokens must not be read as a conflict.
 # `-n 1` + `--no-leftover` yield at most one block; multiple would simply union.
 function _parse_findmus_tokens(output::AbstractString, known::Set{String})
@@ -224,7 +195,7 @@ function _classify_conflict(
     return error(
         "findMUS failed to compute a conflict: ",
         failure,
-        ". If findMUS timed out, raise the limit with `MOI.TimeLimitSec`.\n",
+        ".\n",
         strip(string(errors, "\n", output)),
     )
 end
@@ -258,8 +229,8 @@ conflict is the minimal set findMUS isolates; on timeout no conflict is reported
 rather than a possibly non-minimal one. Conflict analysis always uses the Chuffed
 subsolver, regardless of the solver the `Optimizer` was constructed with (so a
 model outside Chuffed's support, for example one with floating-point variables,
-reports `NO_CONFLICT_FOUND`), and is bounded by [`MOI.TimeLimitSec`](@ref)
-(default 60 seconds).
+reports `NO_CONFLICT_FOUND`), and is limited on a best-effort basis by
+[`MOI.TimeLimitSec`](@ref) (default 60 seconds).
 
 See also [`MOI.ConflictStatus`](@ref) and
 [`MOI.ConstraintConflictStatus`](@ref).
