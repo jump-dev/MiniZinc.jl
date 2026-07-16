@@ -33,6 +33,12 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
     options::Dict{String,Any}
     time_limit_sec::Union{Nothing,Float64}
     solve_time_sec::Float64
+    # Conflict (IIS) state, populated by `compute_conflict!`. `conflict_status`
+    # tracks whether a conflict computation ran and its outcome;
+    # `conflict_constraints` holds the inner `ConstraintIndex`es that findMUS
+    # reported as part of a minimal unsatisfiable subset.
+    conflict_status::MOI.ConflictStatusCode
+    conflict_constraints::Set{MOI.ConstraintIndex}
     function Optimizer{T}(solver::String) where {T}
         if solver == "chuffed"
             solver = Chuffed()
@@ -49,6 +55,8 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
             options,
             nothing,
             NaN,
+            MOI.COMPUTE_CONFLICT_NOT_CALLED,
+            Set{MOI.ConstraintIndex}(),
         )
     end
 end
@@ -136,6 +144,8 @@ function MOI.empty!(model::Optimizer{T}) where {T}
     model.primal_objective = zero(T)
     empty!(model.primal_solutions)
     model.solve_time_sec = NaN
+    model.conflict_status = MOI.COMPUTE_CONFLICT_NOT_CALLED
+    empty!(model.conflict_constraints)
     return
 end
 
@@ -215,6 +225,9 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     time_start = time()
     MOI.empty!(dest.inner)
     empty!(dest.primal_solutions)
+    # A re-solve invalidates any conflict computed for the previous model.
+    dest.conflict_status = MOI.COMPUTE_CONFLICT_NOT_CALLED
+    empty!(dest.conflict_constraints)
     index_map = MOI.copy_to(dest.inner, src)
     ret = _run_minizinc(dest)
     if !isempty(ret)

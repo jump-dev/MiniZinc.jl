@@ -6,6 +6,7 @@
 module MiniZinc
 
 import Chuffed_jll
+import FindMUS_jll
 import MathOptInterface as MOI
 import MiniZinc_jll
 
@@ -136,5 +137,6 @@ MOI.get(::Model, ::MOI.ListOfSupportedNonlinearOperators) = _SUPPORTED_OPS
 
 include("write.jl")
 include("optimize.jl")
+include("compute_conflict.jl")
 
 end # module

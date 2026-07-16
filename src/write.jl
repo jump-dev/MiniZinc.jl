@@ -525,6 +525,36 @@ function _write_ifelse(
     return
 end
 
+# Re-emit a single `constraint <body>;` line with a string-literal annotation
+# carrying `token`, e.g. `constraint (<body>) :: "c3";`. A MUS tool (findMUS)
+# surfaces the literal as the constraint's `expression_name`, which lets
+# `compute_conflict.jl` map each conflict member back to a MOI `ConstraintIndex`.
+# Every `_write_constraint` method emits exactly one `constraint ...;` statement,
+# so capturing it and splicing the annotation in is sufficient and keeps the
+# annotation logic out of the ~15 overloads.
+function _write_annotated_constraint(
+    io::IO,
+    predicates::Set,
+    variables::Dict,
+    f,
+    s,
+    token::AbstractString,
+)
+    buf = IOBuffer()
+    _write_constraint(buf, predicates, variables, f, s)
+    line = String(take!(buf))
+    # The splice depends on the one-`constraint`-per-overload invariant above.
+    # Check it explicitly rather than with `@assert`, which Julia may disable at
+    # higher optimization levels; a violation would otherwise silently corrupt a
+    # token.
+    if !startswith(line, "constraint ") || !endswith(line, ";\n")
+        error("cannot annotate constraint output: ", repr(line))
+    end
+    body = chop(line; head = length("constraint "), tail = 2)
+    println(io, "constraint (", body, ") :: \"", token, "\";")
+    return
+end
+
 function Base.write(io::IO, model::Model{T}) where {T}
     rs = [
         s -> match(r"^[^a-zA-Z]", s) !== nothing ? "x" * s : s,
@@ -533,6 +563,13 @@ function Base.write(io::IO, model::Model{T}) where {T}
     MOI.FileFormats.create_unique_variable_names(model, false, rs)
     variables = _write_variables(io, model)
     predicates = Set{String}()
+    # Opt-in (set by `compute_conflict.jl`): stamp each emitted constraint with a
+    # globally-unique string token so findMUS can report which MOI constraint each
+    # MUS member maps back to. The `ci -> token` table is stashed in `model.ext`
+    # for `compute_conflict!` to read; a running counter guarantees uniqueness
+    # across `(F, S)` types (MOI only promises `ci.value` uniqueness within one).
+    annotate = get(model.ext, :conflict_annotate, false)::Bool
+    tokens = Dict{MOI.ConstraintIndex,String}()
     for (F, S) in MOI.get(model, MOI.ListOfConstraintTypesPresent())
         if F == MOI.VariableIndex
             continue
@@ -540,7 +577,20 @@ function Base.write(io::IO, model::Model{T}) where {T}
         for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
             f = MOI.get(model, MOI.ConstraintFunction(), ci)
             s = MOI.get(model, MOI.ConstraintSet(), ci)
-            _write_constraint(io, predicates, variables, f, s)
+            if annotate
+                token = string("c", length(tokens) + 1)
+                tokens[ci] = token
+                _write_annotated_constraint(
+                    io,
+                    predicates,
+                    variables,
+                    f,
+                    s,
+                    token,
+                )
+            else
+                _write_constraint(io, predicates, variables, f, s)
+            end
         end
     end
     sense = MOI.get(model, MOI.ObjectiveSense())
@@ -556,6 +606,9 @@ function Base.write(io::IO, model::Model{T}) where {T}
     end
     for p in predicates
         println(io, "include \"", p, ".mzn\";")
+    end
+    if annotate
+        model.ext[:conflict_tokens] = tokens
     end
     return
 end

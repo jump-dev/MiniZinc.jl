@@ -178,9 +178,59 @@ List of supported constraint types:
 
 List of supported model attributes:
 
+ * [`MOI.ConflictStatus()`](@ref)
  * [`MOI.NLPBlock()`](@ref)
  * [`MOI.Name()`](@ref)
  * [`MOI.ObjectiveSense()`](@ref)
+
+List of supported constraint attributes:
+
+ * [`MOI.ConstraintConflictStatus()`](@ref)
+
+## Conflicts (IIS)
+
+For an infeasible model, [`MOI.compute_conflict!`](@ref) finds a minimal
+conflicting subset of constraints (an Irreducible Inconsistent Subsystem),
+after which [`MOI.ConstraintConflictStatus`](@ref) reports which constraints
+participate. For example, this model is infeasible because `x[1] + x[2]` cannot
+be both `>= 18` and `<= 5`:
+
+```julia
+model = MOI.Utilities.CachingOptimizer(
+    MiniZinc.Model{Int}(),
+    MiniZinc.Optimizer{Int}("chuffed"),
+)
+x = MOI.add_variables(model, 2)
+MOI.add_constraint.(model, x, MOI.Interval(1, 10))
+f = 1 * x[1] + 1 * x[2]
+MOI.add_constraint(model, f, MOI.GreaterThan(18))  # x[1] + x[2] >= 18
+MOI.add_constraint(model, f, MOI.LessThan(5))       # x[1] + x[2] <= 5
+MOI.optimize!(model)
+if MOI.get(model, MOI.TerminationStatus()) == MOI.INFEASIBLE
+    MOI.compute_conflict!(model)
+    if MOI.get(model, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
+        # Query each constraint you added to `model` for its participation.
+        # Variable bounds always read NOT_IN_CONFLICT (see below).
+        for (F, S) in MOI.get(model, MOI.ListOfConstraintTypesPresent())
+            for ci in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
+                status = MOI.get(model, MOI.ConstraintConflictStatus(), ci)
+                # status is MOI.IN_CONFLICT or MOI.NOT_IN_CONFLICT
+            end
+        end
+    end
+end
+```
+
+This uses [findMUS](https://gitlab.com/minizinc/FindMUS), which is not part of
+the standard MiniZinc distribution; it is supplied by the `FindMUS_jll`
+dependency, so no extra setup is required.
+
+Conflicts cover modeling constraints only; variable bounds are folded into the
+variable declarations and never appear in a conflict.
+
+Conflict analysis always uses the Chuffed subsolver, regardless of the solver
+passed to `MiniZinc.Optimizer`, so a model outside Chuffed's support (for
+example, one with floating-point variables) reports `NO_CONFLICT_FOUND`.
 
 ## Options
 

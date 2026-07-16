@@ -1202,6 +1202,35 @@ function test_moi_tests()
     return
 end
 
+function test_moi_conflict_tests()
+    model = MOI.Utilities.CachingOptimizer(
+        MOI.Utilities.Model{Int}(),
+        MiniZinc.Optimizer{Int}("chuffed"),
+    )
+    config = MOI.Test.Config(Int)
+    MOI.Test.runtests(
+        model,
+        config;
+        include = String["test_solve_conflict_"],
+        exclude = Union{String,Regex}[
+            # Each of these asserts that a variable bound or integrality is itself
+            # IN_CONFLICT. MiniZinc folds variable bounds and integrality into the
+            # variable declaration, so they have no constraint line to annotate and
+            # are never reported IN_CONFLICT (such conflicts surface as
+            # NO_CONFLICT_FOUND). `affine_affine`, `EqualTo`, and `NOT_IN_CONFLICT`
+            # fail on their `x >= 0` / `y >= 0` bound assertions, not the affine
+            # ones; `zeroone`/`zeroone_2` hinge on a `ZeroOne` integrality.
+            "test_solve_conflict_bound_bound",
+            "test_solve_conflict_invalid_interval",
+            "test_solve_conflict_affine_affine",
+            "test_solve_conflict_EqualTo",
+            "test_solve_conflict_NOT_IN_CONFLICT",
+            r"test_solve_conflict_zeroone",  # zeroone and zeroone_2
+        ],
+    )
+    return
+end
+
 function test_model_filename()
     model = MOI.Utilities.Model{Int}()
     x, x_int = MOI.add_constrained_variable(model, MOI.Integer())
@@ -2038,6 +2067,358 @@ function test_example_sudoku()
     @test MOI.get(model, MOI.PrimalStatus()) === MOI.NO_SOLUTION
     @test MOI.get(model, MOI.ResultCount()) == 0
     rm("test_sudoku.mzn")
+    return
+end
+
+# --- Conflict (IIS) support via findMUS -----------------------------------------
+
+# An infeasible CP model whose conflict lies in two multi-variable constraints
+# (c1, c2) so they are emitted as annotatable `constraint` lines; c3 is
+# satisfiable and unrelated. Returns the optimizer, the src->inner index map, and
+# the source constraint indices.
+function _conflict_model()
+    src = MiniZinc.Model{Int}()
+    x = MOI.add_variable(src)
+    y = MOI.add_variable(src)
+    z = MOI.add_variable(src)
+    for (v, n) in ((x, "x"), (y, "y"), (z, "z"))
+        MOI.set(src, MOI.VariableName(), v, n)
+        MOI.add_constraint(src, v, MOI.Interval(1, 10))
+    end
+    xy = MOI.ScalarAffineFunction(
+        [MOI.ScalarAffineTerm(1, x), MOI.ScalarAffineTerm(1, y)],
+        0,
+    )
+    zx = MOI.ScalarAffineFunction(
+        [MOI.ScalarAffineTerm(1, z), MOI.ScalarAffineTerm(-1, x)],
+        0,
+    )
+    c1 = MOI.add_constraint(src, xy, MOI.GreaterThan(18)) # x + y >= 18
+    c2 = MOI.add_constraint(src, xy, MOI.LessThan(5))     # x + y <= 5
+    c3 = MOI.add_constraint(src, zx, MOI.GreaterThan(0))  # z >= x (unrelated)
+    opt = MiniZinc.Optimizer{Int}("chuffed")
+    index_map, _ = MOI.optimize!(opt, src)
+    return opt, index_map, (c1, c2, c3)
+end
+
+# Annotation is a pure `write.jl` feature and needs no findMUS to test.
+function test_write_conflict_annotations()
+    model = MiniZinc.Model{Int}()
+    x = MOI.add_variable(model)
+    y = MOI.add_variable(model)
+    MOI.set(model, MOI.VariableName(), x, "x")
+    MOI.set(model, MOI.VariableName(), y, "y")
+    MOI.add_constraint(model, x, MOI.Interval(1, 10))
+    MOI.add_constraint(model, y, MOI.Interval(1, 10))
+    f = MOI.ScalarAffineFunction(
+        [MOI.ScalarAffineTerm(1, x), MOI.ScalarAffineTerm(1, y)],
+        0,
+    )
+    c1 = MOI.add_constraint(model, f, MOI.GreaterThan(18))
+    c2 = MOI.add_constraint(model, f, MOI.LessThan(5))
+    # Without the opt-in flag, output is unchanged (no annotations).
+    @test !occursin("::", sprint(write, model))
+    # With it, every emitted constraint carries a unique string token, and the
+    # ci -> token table is exposed via `model.ext`.
+    model.ext[:conflict_annotate] = true
+    annotated = sprint(write, model)
+    @test occursin("\"c1\"", annotated)
+    @test occursin("\"c2\"", annotated)
+    tokens = model.ext[:conflict_tokens]
+    @test length(tokens) == 2
+    @test Set(values(tokens)) == Set(["c1", "c2"])
+    @test tokens[c1] != tokens[c2]
+    return
+end
+
+# The annotation splice must hold across every constraint shape, not only
+# `ScalarAffineFunction` — especially the global/nonlinear emitters whose
+# `_write_constraint` overloads build the line across multiple `print` calls.
+function test_write_conflict_annotations_shapes()
+    model = MiniZinc.Model{Int}()
+    x = [MOI.add_constrained_variable(model, MOI.Integer())[1] for _ in 1:3]
+    for i in 1:3
+        MOI.set(model, MOI.VariableName(), x[i], "x$i")
+    end
+    saf = MOI.ScalarAffineFunction(
+        [MOI.ScalarAffineTerm(1, x[1]), MOI.ScalarAffineTerm(1, x[2])],
+        0,
+    )
+    MOI.add_constraint(model, saf, MOI.LessThan(5))
+    MOI.add_constraint(
+        model,
+        MOI.VectorOfVariables(x),
+        MOI.Table([1 1 0; 0 1 1]),
+    )
+    nl = MOI.ScalarNonlinearFunction(:alldifferent, Any[x])
+    MOI.add_constraint(model, nl, MOI.EqualTo(1))
+    model.ext[:conflict_annotate] = true
+    annotated = sprint(write, model)
+    lines = filter(startswith("constraint "), split(annotated, '\n'))
+    # Affine, table (loop-built), and nonlinear-global lines are each wrapped
+    # and annotated with a well-formed token; none trips the splice guard.
+    @test length(lines) == 3
+    for line in lines
+        @test occursin(r"^constraint \(.*\) :: \"c\d+\";$", line)
+    end
+    @test length(model.ext[:conflict_tokens]) == 3
+    return
+end
+
+# The findMUS report parser keys off the `%%%mzn-json-*` block markers and the
+# `expression_name` field. Exercise it with canned reports (no findMUS needed).
+function test_parse_findmus_tokens()
+    known = Set(["c1", "c2", "c3"])
+    # findMUS emits one field per line, with no space before the colon.
+    report = """
+    preamble
+    %%%mzn-json-start
+    { "expression_name": "c1" },
+    { "expression_name": "c2" }
+    %%%mzn-json-end
+    """
+    @test MiniZinc._parse_findmus_tokens(report, known) == Set(["c1", "c2"])
+    # A compacted block (several fields on one line) must still yield every
+    # member, not just the first.
+    compact = "%%%mzn-json-start\n{\"expression_name\": \"c1\", \"x\": 0, \"expression_name\": \"c2\"}\n%%%mzn-json-end\n"
+    @test MiniZinc._parse_findmus_tokens(compact, known) == Set(["c1", "c2"])
+    # An `expression_name` outside the JSON block is ignored.
+    @test isempty(
+        MiniZinc._parse_findmus_tokens("\"expression_name\": \"c1\"", known),
+    )
+    # Tokens we did not emit are ignored even inside the block.
+    foreign = "%%%mzn-json-start\n{\"expression_name\": \"other\"}\n%%%mzn-json-end\n"
+    @test isempty(MiniZinc._parse_findmus_tokens(foreign, known))
+    # No block markers -> nothing found.
+    @test isempty(MiniZinc._parse_findmus_tokens("no markers here", known))
+    # Two blocks union their members (documented behaviour of the scanner).
+    two =
+        "%%%mzn-json-start\n{\"expression_name\": \"c1\"}\n%%%mzn-json-end\n" *
+        "%%%mzn-json-start\n{\"expression_name\": \"c2\"}\n%%%mzn-json-end\n"
+    @test MiniZinc._parse_findmus_tokens(two, known) == Set(["c1", "c2"])
+    # A stray end marker before any start is a no-op (the flag is a boolean).
+    stray = "%%%mzn-json-end\n{\"expression_name\": \"c1\"}\n"
+    @test isempty(MiniZinc._parse_findmus_tokens(stray, known))
+    # A truncated block (start with no closing end marker, e.g. findMUS was
+    # interrupted mid-report) commits nothing: partial output is not a conflict.
+    truncated = "%%%mzn-json-start\n{\"expression_name\": \"c1\"}\n"
+    @test isempty(MiniZinc._parse_findmus_tokens(truncated, known))
+    return
+end
+
+# The findMUS command is not exercised by CI without findMUS installed, so lock
+# its flags here. Each is load-bearing and verified against findMUS v0.7.0.
+function test_findmus_command()
+    cmd = MiniZinc._findmus_cmd(
+        "minizinc",
+        "/x/findmus.msc",
+        "/x/model.mzn",
+        60_000,
+        30_000,
+    )
+    args = cmd.exec
+    for flag in (
+        "--named-only",
+        "-g",
+        "--soft-defines",
+        "--paramset",
+        "mzn",
+        "--output-json",
+        "--no-leftover",
+        "org.chuffed.chuffed",
+    )
+        @test flag in args
+    end
+    @test args[findfirst(==("-n"), args)+1] == "1"
+    @test args[findfirst(==("-t"), args)+1] == "60000"
+    @test args[findfirst(==("--subsolver-timelimit"), args)+1] == "30000"
+    return
+end
+
+# `_findmus_solver_path` builds the `MZN_SOLVER_PATH` exposed to the driver. The
+# findMUS/Chuffed directories come from the environment, so just check that a
+# pre-existing `MZN_SOLVER_PATH` entry is preserved (and absent otherwise). No
+# findMUS needed: the function only manipulates path strings.
+function test_findmus_solver_path()
+    sep = Sys.iswindows() ? ';' : ':'
+    msc = joinpath(@__DIR__, "findmus.msc")
+    base = withenv(
+        () -> MiniZinc._findmus_solver_path(msc),
+        "MZN_SOLVER_PATH" => nothing,
+    )
+    @test dirname(abspath(msc)) in split(base, sep)
+    @test !("/custom/solver/dir" in split(base, sep))
+    extended = withenv(
+        () -> MiniZinc._findmus_solver_path(msc),
+        "MZN_SOLVER_PATH" => "/custom/solver/dir",
+    )
+    @test "/custom/solver/dir" in split(extended, sep)
+    @test dirname(abspath(msc)) in split(extended, sep)
+    return
+end
+
+# `_classify_conflict` is the pure decision logic of `compute_conflict!`. Drive
+# its outcomes with canned findMUS output, again without needing findMUS.
+function test_classify_conflict()
+    F, S = MOI.ScalarAffineFunction{Int}, MOI.LessThan{Int}
+    ci(i) = MOI.ConstraintIndex{F,S}(i)
+    tokens = Dict{MOI.ConstraintIndex,String}(ci(1) => "c1", ci(2) => "c2")
+    mus = "%%%mzn-json-start\n{ \"expression_name\": \"c2\" }\n%%%mzn-json-end\n"
+    # A reported MUS -> CONFLICT_FOUND with exactly its members, trusted even
+    # when the process also reports a non-zero exit.
+    status, conflict = MiniZinc._classify_conflict(
+        mus,
+        "",
+        "findMUS exited with a non-zero status",
+        tokens,
+    )
+    @test status == MOI.CONFLICT_FOUND
+    @test conflict == Set([ci(2)])
+    # findMUS proving the model satisfiable is a feasibility proof ->
+    # NO_CONFLICT_EXISTS.
+    status, conflict = MiniZinc._classify_conflict(
+        "",
+        "Error: Model is Satisfiable",
+        nothing,
+        tokens,
+    )
+    @test status == MOI.NO_CONFLICT_EXISTS
+    @test isempty(conflict)
+    # Background-unsat is benign even though findMUS exits non-zero.
+    status, _ = MiniZinc._classify_conflict(
+        "",
+        "Background is not satisfiable, exiting",
+        "findMUS exited with a non-zero status",
+        tokens,
+    )
+    @test status == MOI.NO_CONFLICT_FOUND
+    # A genuine failure (no MUS, no benign marker) is an error, not a silent
+    # NO_CONFLICT_FOUND.
+    @test_throws(
+        ErrorException,
+        MiniZinc._classify_conflict(
+            "",
+            "unexpected solver crash",
+            "findMUS exited with a non-zero status",
+            tokens,
+        ),
+    )
+    # A clean findMUS exit (failure === nothing) with annotatable constraints
+    # but no attributable MUS and no benign marker is NO_CONFLICT_FOUND, not an
+    # error — the common "no MUS could be isolated" outcome.
+    status, conflict = MiniZinc._classify_conflict("", "", nothing, tokens)
+    @test status == MOI.NO_CONFLICT_FOUND
+    @test isempty(conflict)
+    # An empty token table (a model with no annotatable constraints, e.g. only
+    # variable bounds, which fold into declarations) can never yield
+    # CONFLICT_FOUND, whatever the report contains.
+    status, conflict = MiniZinc._classify_conflict(
+        mus,
+        "",
+        nothing,
+        Dict{MOI.ConstraintIndex,String}(),
+    )
+    @test status == MOI.NO_CONFLICT_FOUND
+    @test isempty(conflict)
+    return
+end
+
+# Querying participation before computing the conflict is an error.
+function test_constraint_conflict_status_before_compute()
+    opt, index_map, (c1, _, _) = _conflict_model()
+    @test MOI.get(opt, MOI.ConflictStatus()) == MOI.COMPUTE_CONFLICT_NOT_CALLED
+    @test_throws(
+        MOI.GetAttributeNotAllowed{MOI.ConstraintConflictStatus},
+        MOI.get(opt, MOI.ConstraintConflictStatus(), index_map[c1]),
+    )
+    return
+end
+
+# A genuine findMUS failure (here a solver config whose binary is missing)
+# surfaces as an ErrorException. The bogus config is supplied via
+# `JULIA_FINDMUS_MSC`, so the test needs only the MiniZinc driver, not findMUS.
+function test_compute_conflict_failure()
+    dir = mktempdir()
+    msc = joinpath(dir, "findmus.msc")
+    write(
+        msc,
+        string(
+            "{\"id\":\"org.minizinc.findmus\",\"name\":\"findMUS\",",
+            "\"executable\":\"",
+            joinpath(dir, "missing_binary"),
+            "\",",
+            "\"version\":\"0.7.0\",\"supportsMzn\":true}",
+        ),
+    )
+    withenv("JULIA_FINDMUS_MSC" => msc) do
+        opt, _, _ = _conflict_model()
+        @test_throws ErrorException MOI.compute_conflict!(opt)
+    end
+    return
+end
+
+function test_compute_conflict_found()
+    opt, index_map, (c1, c2, c3) = _conflict_model()
+    @test MOI.get(opt, MOI.TerminationStatus()) == MOI.INFEASIBLE
+    MOI.compute_conflict!(opt)
+    @test MOI.get(opt, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
+    @test MOI.get(opt, MOI.ConstraintConflictStatus(), index_map[c1]) ==
+          MOI.IN_CONFLICT
+    @test MOI.get(opt, MOI.ConstraintConflictStatus(), index_map[c2]) ==
+          MOI.IN_CONFLICT
+    @test MOI.get(opt, MOI.ConstraintConflictStatus(), index_map[c3]) ==
+          MOI.NOT_IN_CONFLICT
+    # Exactly one conflict is reported, so `ConflictCount` is 1 and an
+    # out-of-range conflict index or an invalid constraint errors rather than
+    # silently returning a status.
+    @test MOI.get(opt, MOI.ConflictCount()) == 1
+    @test_throws(
+        MOI.ConflictIndexBoundsError{MOI.ConstraintConflictStatus},
+        MOI.get(opt, MOI.ConstraintConflictStatus(2), index_map[c1]),
+    )
+    bad = MOI.ConstraintIndex{MOI.ScalarAffineFunction{Int},MOI.LessThan{Int}}(
+        987654,
+    )
+    @test_throws(
+        MOI.InvalidIndex,
+        MOI.get(opt, MOI.ConstraintConflictStatus(), bad),
+    )
+    # Re-solving the same optimizer must clear the stale conflict; otherwise a
+    # later `ConflictStatus` query would report the previous model's conflict.
+    feasible = MiniZinc.Model{Int}()
+    v = MOI.add_variable(feasible)
+    MOI.set(feasible, MOI.VariableName(), v, "v")
+    MOI.add_constraint(feasible, v, MOI.Interval(1, 10))
+    MOI.optimize!(opt, feasible)
+    @test MOI.get(opt, MOI.ConflictStatus()) == MOI.COMPUTE_CONFLICT_NOT_CALLED
+    @test MOI.get(opt, MOI.ConflictCount()) == 0
+    @test_throws(
+        MOI.GetAttributeNotAllowed{MOI.ConstraintConflictStatus},
+        MOI.get(opt, MOI.ConstraintConflictStatus(), index_map[c1]),
+    )
+    return
+end
+
+# findMUS proves a feasible model satisfiable, a genuine feasibility proof, so
+# its conflict status is NO_CONFLICT_EXISTS (not NO_CONFLICT_FOUND, which is
+# reserved for "no conflict could be attributed" without such a proof).
+function test_compute_conflict_feasible()
+    src = MiniZinc.Model{Int}()
+    x = MOI.add_variable(src)
+    y = MOI.add_variable(src)
+    for (v, n) in ((x, "x"), (y, "y"))
+        MOI.set(src, MOI.VariableName(), v, n)
+        MOI.add_constraint(src, v, MOI.Interval(1, 10))
+    end
+    f = MOI.ScalarAffineFunction(
+        [MOI.ScalarAffineTerm(1, x), MOI.ScalarAffineTerm(1, y)],
+        0,
+    )
+    MOI.add_constraint(src, f, MOI.GreaterThan(5))
+    opt = MiniZinc.Optimizer{Int}("chuffed")
+    MOI.optimize!(opt, src)
+    MOI.compute_conflict!(opt)
+    @test MOI.get(opt, MOI.ConflictStatus()) == MOI.NO_CONFLICT_EXISTS
     return
 end
 
