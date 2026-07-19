@@ -1,7 +1,16 @@
 diff --git a/include/minizinc/process.hh b/include/minizinc/process.hh
-index 3e9fb792..7e397a1c 100644
+index 3e9fb792..69716c0e 100644
 --- a/include/minizinc/process.hh
 +++ b/include/minizinc/process.hh
+@@ -208,7 +208,7 @@ public:
+     }
+ 
+     CloseHandle(piProcInfo.hThread);
+-    delete cmdstr;
++    free(cmdstr);
+ 
+     // Stop ReadFile from blocking
+     CloseHandle(g_hChildStd_OUT_Wr);
 @@ -226,11 +226,11 @@ public:
      std::condition_variable cv;
  
@@ -17,6 +26,92 @@ index 3e9fb792..7e397a1c 100644
        auto shouldStop = [&] { return hadInterrupt || (doneStderr && doneStdout); };
        std::unique_lock<std::mutex> lck(_interruptMutex);
        if (_timelimit != 0) {
+diff --git a/lib/file_utils.cpp b/lib/file_utils.cpp
+index 7bb532b3..5871938b 100644
+--- a/lib/file_utils.cpp
++++ b/lib/file_utils.cpp
+@@ -48,7 +48,7 @@
+ #include "Shlobj.h"
+ 
+ #include <direct.h>
+-#else
++#elif !defined(_WIN32)
+ #include <dirent.h>
+ #include <ftw.h>
+ #include <libgen.h>
+@@ -131,7 +131,7 @@ std::string file_path(const std::string& filename, const std::string& basePath)
+   auto f = !basePath.empty() && !is_absolute(filename) ? basePath + "/" + filename : filename;
+ 
+   // Get real path of absolute path or resolve relative to current directory
+-#ifdef _MSC_VER
++#ifdef _WIN32
+   LPWSTR lpFilePart;
+   DWORD nBufferLength = GetFullPathNameW(utf8_to_wide(f).c_str(), 0, nullptr, &lpFilePart);
+   auto* lpBuffer = static_cast<LPWSTR>(LocalAlloc(LMEM_FIXED, sizeof(WCHAR) * nBufferLength));
+@@ -161,7 +161,7 @@ std::string file_path(const std::string& filename, const std::string& basePath)
+ }
+ 
+ std::string dir_name(const std::string& filename) {
+-#ifdef _MSC_VER
++#ifdef _WIN32
+   size_t pos = filename.find_last_of("\\/");
+   return (pos == std::string::npos) ? "" : filename.substr(0, pos);
+ #else
+@@ -174,7 +174,7 @@ std::string dir_name(const std::string& filename) {
+ }
+ 
+ std::string base_name(const std::string& filename) {
+-#ifdef _MSC_VER
++#ifdef _WIN32
+   size_t pos = filename.find_last_of("\\/");
+   return (pos == std::string::npos) ? filename : filename.substr(pos + 1);
+ #else
+@@ -187,12 +187,15 @@ std::string base_name(const std::string& filename) {
+ }
+ 
+ bool is_absolute(const std::string& path) {
+-#ifdef _MSC_VER
+-  if (path.size() > 2 &&
++#ifdef _WIN32
++  if (path.size() > 1 &&
+       ((path[0] == '\\' && path[1] == '\\') || (path[0] == '/' && path[1] == '/'))) {
+     return true;
+   }
+-  return PathIsRelativeW(utf8_to_wide(path).c_str()) == FALSE;
++  if (path.size() > 2 && isalpha(static_cast<unsigned char>(path[0])) && path[1] == ':') {
++    return true;
++  }
++  return false;
+ #else
+   return path.empty() ? false : (path[0] == '/');
+ #endif
+@@ -200,7 +203,7 @@ bool is_absolute(const std::string& path) {
+ 
+ std::vector<std::string> get_env_list(const std::string& env) {
+   std::string path;
+-#ifdef _MSC_VER
++#ifdef _WIN32
+   wchar_t* path_c = _wgetenv(utf8_to_wide(env).c_str());
+   char pathsep = ';';
+   if (path_c != nullptr) {
+@@ -225,7 +228,7 @@ std::vector<std::string> get_env_list(const std::string& env) {
+ }
+ 
+ std::string find_executable(const std::string& filename, const std::string& basePath) {
+-#ifdef _MSC_VER
++#ifdef _WIN32
+   // On Windows, executables must end with one of these extensions
+   std::vector<std::string> exeSuffixes = get_env_list("PATHEXT");
+   if (std::find_if(exeSuffixes.begin(), exeSuffixes.end(), [&](const auto& suffix) {
+@@ -274,7 +277,7 @@ std::string find_executable(const std::string& filename, const std::string& base
+ 
+ std::vector<std::string> directory_list(const std::string& dir, const std::string& ext) {
+   std::vector<std::string> entries;
+-#ifdef _MSC_VER
++#ifdef _WIN32
+   WIN32_FIND_DATAW findData;
+   HANDLE hFind = ::FindFirstFileW(utf8_to_wide(dir + "/*." + ext).c_str(), &findData);
+   if (hFind != INVALID_HANDLE_VALUE) {
 diff --git a/solvers/MIP/MIP_cplex_wrap.cpp b/solvers/MIP/MIP_cplex_wrap.cpp
 index cbb2bdc4..a7fad1f1 100644
 --- a/solvers/MIP/MIP_cplex_wrap.cpp
