@@ -33,7 +33,7 @@ jobs:
     runs-on: windows-latest
     needs: build-linux
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: julia-actions/setup-julia@v2
         with:
           version: "1"
