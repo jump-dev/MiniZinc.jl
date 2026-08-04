@@ -135,6 +135,7 @@ const _PREDICATE_NAMES = Set(["alldifferent"])
 
 MOI.get(::Model, ::MOI.ListOfSupportedNonlinearOperators) = _SUPPORTED_OPS
 
+include("tee.jl")
 include("write.jl")
 include("optimize.jl")
 include("compute_conflict.jl")

@@ -29,6 +29,38 @@ function _test_file_contents(filename, args...)
     return
 end
 
+function test_tee_write()
+    a, b = IOBuffer(), IOBuffer()
+    tee = MiniZinc._Tee(a, b)
+    @test iswritable(tee)
+    write(tee, UInt8('x'))
+    print(tee, " hello ")
+    write(tee, "world ")
+    print(tee, 42)
+    # A payload larger than one pipe buffer, to cover the chunked
+    # `unsafe_write` path.
+    payload = "y"^100_000
+    write(tee, payload)
+    flush(tee)
+    for io in (a, b)
+        @test String(take!(io)) == "x hello world 42" * payload
+    end
+    return
+end
+
+function test_tee_subprocess()
+    # `_Tee` must be usable as a `run(pipeline(...))` redirect target, with the
+    # process's output landing in both sinks by the time `run` returns.
+    file = joinpath(mktempdir(), "stdout.txt")
+    mirror = IOBuffer()
+    open(file, "w") do io
+        return run(pipeline(`echo hello`; stdout = MiniZinc._Tee(io, mirror)))
+    end
+    @test read(file, String) == "hello\n"
+    @test String(take!(mirror)) == "hello\n"
+    return
+end
+
 function test_write_bool_model()
     model = MiniZinc.Model{Bool}()
     x = MOI.add_variable(model)
