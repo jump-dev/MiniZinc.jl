@@ -31,6 +31,7 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
     primal_objective::T
     primal_solutions::Vector{Dict{MOI.VariableIndex,T}}
     options::Dict{String,Any}
+    silent::Bool
     time_limit_sec::Union{Nothing,Float64}
     solve_time_sec::Float64
     # Conflict (IIS) state, populated by `compute_conflict!`. `conflict_status`
@@ -53,6 +54,7 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
             zero(T),
             primal_solutions,
             options,
+            false,
             nothing,
             NaN,
             MOI.COMPUTE_CONFLICT_NOT_CALLED,
@@ -182,6 +184,15 @@ function MOI.set(
         throw(MOI.SetAttributeNotAllowed(attr, msg))
     end
     model.options["num_solutions"] = value
+    return
+end
+
+MOI.supports(::Optimizer, ::MOI.Silent) = true
+
+MOI.get(model::Optimizer, ::MOI.Silent) = model.silent
+
+function MOI.set(model::Optimizer, ::MOI.Silent, value::Bool)
+    model.silent = value
     return
 end
 
