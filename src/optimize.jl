@@ -95,7 +95,7 @@ function _run_minizinc(dest::Optimizer)
     _stderr = joinpath(dir, "_stderr.txt")
     try
         _minizinc_exe() do exe
-            cmd = `$(exe) --solver $(dest.solver) --output-objective -o $(output) $(filename)`
+            cmd = `$(exe) -v --solver $(dest.solver) --output-objective -o $(output) $(filename)`
             if dest.time_limit_sec !== nothing
                 limit = round(Int, 1_000 * dest.time_limit_sec::Float64)
                 cmd = `$cmd --time-limit $limit`
