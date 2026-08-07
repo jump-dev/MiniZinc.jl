@@ -1639,6 +1639,45 @@ function test_highs_optimization_time_limit()
     return
 end
 
+function test_highs_optimization_silent()
+    model = MOI.Utilities.Model{Float64}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.add_constraint(model, x, MOI.Interval(1.0, 10.0))
+    MOI.set(model, MOI.ObjectiveFunction{typeof(x)}(), x)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    solver = MiniZinc.Optimizer{Float64}("highs")
+    # set/unset silent
+    @test MOI.supports(solver, MOI.Silent())
+    MOI.set(solver, MOI.Silent(), true)
+    @test MOI.get(solver, MOI.Silent()) == true
+    MOI.set(solver, MOI.Silent(), false)
+    @test MOI.get(solver, MOI.Silent()) == false
+    mktempdir() do dir
+        # check that we logged something
+        loud_log = joinpath(dir, "loud.log")
+        open(loud_log, "w") do logfile
+            redirect_stdout(logfile) do
+                return redirect_stderr(logfile) do
+                    return MOI.optimize!(solver, model)
+                end
+            end
+        end
+        @test occursin("MiniZinc", read(loud_log, String))
+        # back to silent
+        MOI.set(solver, MOI.Silent(), true)
+        silent_log = joinpath(dir, "silent.log")
+        open(silent_log, "w") do logfile
+            redirect_stdout(logfile) do
+                return redirect_stderr(logfile) do
+                    return MOI.optimize!(solver, model)
+                end
+            end
+        end
+        @test isempty(read(silent_log, String))
+    end
+    return
+end
+
 function test_version_number()
     solver = MiniZinc.Optimizer{Float64}("highs")
     version = MOI.get(solver, MOI.SolverVersion())
