@@ -21,7 +21,8 @@ end
 
 function Base.unsafe_write(t::_Tee, p::Ptr{UInt8}, n::UInt)
     unsafe_write(t.a, p, n)
-    return unsafe_write(t.b, p, n)
+    unsafe_write(t.b, p, n)
+    return
 end
 
 function Base.flush(t::_Tee)
@@ -30,4 +31,4 @@ function Base.flush(t::_Tee)
     return
 end
 
-Base.iswritable(::_Tee) = true
+Base.iswritable(t::_Tee) = iswritable(t.a) && iswritable(t.b)
