@@ -54,7 +54,7 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
             zero(T),
             primal_solutions,
             options,
-            true,
+            false,
             nothing,
             NaN,
             MOI.COMPUTE_CONFLICT_NOT_CALLED,
