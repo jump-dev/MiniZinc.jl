@@ -16,13 +16,12 @@ end
 
 function Base.write(t::_Tee, byte::UInt8)
     write(t.a, byte)
-    return write(t.b, byte)
+    return write(t.b, byte)  # We could return either .a or .b
 end
 
 function Base.unsafe_write(t::_Tee, p::Ptr{UInt8}, n::UInt)
     unsafe_write(t.a, p, n)
-    unsafe_write(t.b, p, n)
-    return
+    return unsafe_write(t.b, p, n)  # We could return either .a or .b
 end
 
 function Base.flush(t::_Tee)
