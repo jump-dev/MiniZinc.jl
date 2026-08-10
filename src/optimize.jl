@@ -104,15 +104,11 @@ function _run_minizinc(dest::Optimizer)
                 cmd = `$cmd --num-solutions $(dest.options["num_solutions"])`
             end
             # use `open(...)` blocks so that it always flushes, even on errors
-            open(_stdout, "w") do out
-                open(_stderr, "w") do err
-                    return run(
-                        pipeline(
-                            cmd,
-                            stdout = dest.silent ? out : _Tee(out, stdout),
-                            stderr = dest.silent ? err : _Tee(err, stderr),
-                        ),
-                    )
+            open(_stdout, "w") do out_io
+                open(_stderr, "w") do err_io
+                    stdout = dest.silent ? out_io : _Tee(out_io, Base.stdout)
+                    stderr = dest.silent ? err_io : _Tee(err_io, Base.stderr)
+                    return run(pipeline(cmd; stdout, stderr))
                 end
             end
         end
