@@ -31,6 +31,7 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
     primal_objective::T
     primal_solutions::Vector{Dict{MOI.VariableIndex,T}}
     options::Dict{String,Any}
+    silent::Bool
     time_limit_sec::Union{Nothing,Float64}
     solve_time_sec::Float64
     # Conflict (IIS) state, populated by `compute_conflict!`. `conflict_status`
@@ -53,6 +54,7 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
             zero(T),
             primal_solutions,
             options,
+            true,
             nothing,
             NaN,
             MOI.COMPUTE_CONFLICT_NOT_CALLED,
@@ -93,7 +95,7 @@ function _run_minizinc(dest::Optimizer)
     _stderr = joinpath(dir, "_stderr.txt")
     try
         _minizinc_exe() do exe
-            cmd = `$(exe) --solver $(dest.solver) --output-objective -o $(output) $(filename)`
+            cmd = `$(exe) -v --solver $(dest.solver) --output-objective -o $(output) $(filename)`
             if dest.time_limit_sec !== nothing
                 limit = round(Int, 1_000 * dest.time_limit_sec::Float64)
                 cmd = `$cmd --time-limit $limit`
@@ -101,7 +103,14 @@ function _run_minizinc(dest::Optimizer)
             if dest.options["num_solutions"] !== nothing
                 cmd = `$cmd --num-solutions $(dest.options["num_solutions"])`
             end
-            return run(pipeline(cmd, stdout = _stdout, stderr = _stderr))
+            # use `open(...)` blocks so that it always flushes, even on errors
+            open(_stdout, "w") do out_io
+                open(_stderr, "w") do err_io
+                    stdout = dest.silent ? out_io : _Tee(out_io, Base.stdout)
+                    stderr = dest.silent ? err_io : _Tee(err_io, Base.stderr)
+                    return run(pipeline(cmd; stdout, stderr))
+                end
+            end
         end
     catch
         status = "=====ERROR=====\n"
@@ -182,6 +191,15 @@ function MOI.set(
         throw(MOI.SetAttributeNotAllowed(attr, msg))
     end
     model.options["num_solutions"] = value
+    return
+end
+
+MOI.supports(::Optimizer, ::MOI.Silent) = true
+
+MOI.get(model::Optimizer, ::MOI.Silent) = model.silent
+
+function MOI.set(model::Optimizer, ::MOI.Silent, value::Bool)
+    model.silent = value
     return
 end
 

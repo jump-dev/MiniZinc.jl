@@ -29,6 +29,38 @@ function _test_file_contents(filename, args...)
     return
 end
 
+function test_tee_write()
+    a, b = IOBuffer(), IOBuffer()
+    tee = MiniZinc._Tee(a, b)
+    @test iswritable(tee)
+    write(tee, UInt8('x'))
+    print(tee, " hello ")
+    write(tee, "world ")
+    print(tee, 42)
+    # A payload larger than one pipe buffer, to cover the chunked
+    # `unsafe_write` path.
+    payload = "y"^100_000
+    write(tee, payload)
+    flush(tee)
+    for io in (a, b)
+        @test String(take!(io)) == "x hello world 42" * payload
+    end
+    return
+end
+
+function test_tee_subprocess()
+    # `_Tee` must be usable as a `run(pipeline(...))` redirect target, with the
+    # process's output landing in both sinks by the time `run` returns.
+    file = joinpath(mktempdir(), "stdout.txt")
+    mirror = IOBuffer()
+    open(file, "w") do io
+        return run(pipeline(`echo hello`; stdout = MiniZinc._Tee(io, mirror)))
+    end
+    @test read(file, String) == "hello\n"
+    @test String(take!(mirror)) == "hello\n"
+    return
+end
+
 function test_write_bool_model()
     model = MiniZinc.Model{Bool}()
     x = MOI.add_variable(model)
@@ -1604,6 +1636,45 @@ function test_highs_optimization_time_limit()
     MOI.set(solver, MOI.TimeLimitSec(), 100)
     index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    return
+end
+
+function test_highs_optimization_silent()
+    model = MOI.Utilities.Model{Float64}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.add_constraint(model, x, MOI.Interval(1.0, 10.0))
+    MOI.set(model, MOI.ObjectiveFunction{typeof(x)}(), x)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    solver = MiniZinc.Optimizer{Float64}("highs")
+    # set/unset silent
+    @test MOI.supports(solver, MOI.Silent())
+    MOI.set(solver, MOI.Silent(), true)
+    @test MOI.get(solver, MOI.Silent()) == true
+    MOI.set(solver, MOI.Silent(), false)
+    @test MOI.get(solver, MOI.Silent()) == false
+    mktempdir() do dir
+        # check that we logged something
+        loud_log = joinpath(dir, "loud.log")
+        open(loud_log, "w") do logfile
+            redirect_stdout(logfile) do
+                return redirect_stderr(logfile) do
+                    return MOI.optimize!(solver, model)
+                end
+            end
+        end
+        @test occursin("MiniZinc", read(loud_log, String))
+        # back to silent
+        MOI.set(solver, MOI.Silent(), true)
+        silent_log = joinpath(dir, "silent.log")
+        open(silent_log, "w") do logfile
+            redirect_stdout(logfile) do
+                return redirect_stderr(logfile) do
+                    return MOI.optimize!(solver, model)
+                end
+            end
+        end
+        @test isempty(read(silent_log, String))
+    end
     return
 end
 
