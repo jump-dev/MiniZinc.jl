@@ -108,10 +108,10 @@ function _run_minizinc(dest::Optimizer)
             end
             # use `open(...)` blocks so that it always flushes, even on errors
             open(_stdout, "w") do out_io
-                open(_stderr, "w") do err_io
+                open(_stderr, "w") do stderr
                     stdout = dest.silent ? out_io : _Tee(out_io, Base.stdout)
-                    stderr = dest.silent ? err_io : _Tee(err_io, Base.devnull)
-                    return run(pipeline(cmd; stdout, stderr))
+                    run(pipeline(cmd; stdout, stderr))
+                    return
                 end
             end
         end
