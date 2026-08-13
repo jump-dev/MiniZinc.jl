@@ -95,7 +95,7 @@ function _run_minizinc(dest::Optimizer)
     _stderr = joinpath(dir, "_stderr.txt")
     try
         _minizinc_exe() do exe
-            cmd = `$(exe) --verbose-solving --solver $(dest.solver) --output-objective -o $(output) $(filename)`
+            cmd = `$(exe) --solver $(dest.solver) --output-objective -o $(output) $(filename)`
             if dest.time_limit_sec !== nothing
                 limit = round(Int, 1_000 * dest.time_limit_sec::Float64)
                 cmd = `$cmd --time-limit $limit`
@@ -103,11 +103,14 @@ function _run_minizinc(dest::Optimizer)
             if dest.options["num_solutions"] !== nothing
                 cmd = `$cmd --num-solutions $(dest.options["num_solutions"])`
             end
+            if !dest.silent
+                cmd = `$cmd --verbose-solving`
+            end
             # use `open(...)` blocks so that it always flushes, even on errors
             open(_stdout, "w") do out_io
                 open(_stderr, "w") do err_io
                     stdout = dest.silent ? out_io : _Tee(out_io, Base.stdout)
-                    stderr = dest.silent ? err_io : _Tee(err_io, Base.stderr)
+                    stderr = dest.silent ? err_io : _Tee(err_io, Base.devnull)
                     return run(pipeline(cmd; stdout, stderr))
                 end
             end
