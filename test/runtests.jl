@@ -1662,7 +1662,7 @@ function test_highs_optimization_silent()
                 end
             end
         end
-        @test occursin("MiniZinc", read(loud_log, String))
+        @test occursin("HiGHS", read(loud_log, String))
         # back to silent
         MOI.set(solver, MOI.Silent(), true)
         silent_log = joinpath(dir, "silent.log")
