@@ -126,8 +126,10 @@ function _run_minizinc(dest::Optimizer)
         return status
     end
     if isfile(output)
+        println(read(output, String))
         return read(output, String)
     elseif isfile(_stdout)
+        println(read(_stdout, String))
         return read(_stdout, String)
     end
     return ""
