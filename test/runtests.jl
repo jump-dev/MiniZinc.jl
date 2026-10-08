@@ -2315,7 +2315,6 @@ end
 # pre-existing `MZN_SOLVER_PATH` entry is preserved (and absent otherwise). No
 # findMUS needed: the function only manipulates path strings.
 function test_findmus_solver_path()
-    return
     sep = Sys.iswindows() ? ';' : ':'
     msc = joinpath(@__DIR__, "findmus.msc")
     base = withenv(
@@ -2414,10 +2413,6 @@ end
 # surfaces as an ErrorException. The bogus config is supplied via
 # `JULIA_FINDMUS_MSC`, so the test needs only the MiniZinc driver, not findMUS.
 function test_compute_conflict_failure()
-    return
-    # if Sys.iswindows()
-    #     return
-    # end
     dir = mktempdir()
     msc = joinpath(dir, "findmus.msc")
     write(

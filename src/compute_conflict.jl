@@ -23,7 +23,8 @@ function _findmus_msc()
     # with its working directory set to the temp dir (a relative
     # `JULIA_FINDMUS_MSC` would otherwise break); `FindMUS_jll.findmus_msc` is
     # already absolute.
-    return abspath(get(ENV, "JULIA_FINDMUS_MSC", FindMUS_jll.findmus_msc))
+    findmus_msc = Sys.iswindows() ? "" : FindMUS_jll.findmus_msc
+    return abspath(get(ENV, "JULIA_FINDMUS_MSC", findmus_msc))
 end
 
 # Directories to expose to the MiniZinc driver via `MZN_SOLVER_PATH` so it can
