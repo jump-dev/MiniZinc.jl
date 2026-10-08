@@ -123,7 +123,6 @@ function _run_minizinc(dest::Optimizer)
         if isfile(_stderr)
             status *= read(_stderr, String)
         end
-        @show status
         return status
     end
     if isfile(output)
