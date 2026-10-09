@@ -6,17 +6,15 @@
 module TestMiniZinc
 
 using Test
+
 import Chuffed_jll
 import MathOptInterface as MOI
 import MiniZinc
 
 function runtests()
-    for name in names(@__MODULE__; all = true)
-        if startswith("$(name)", "test_")
-            @testset "$(name)" begin
-                getfield(@__MODULE__, name)()
-            end
-        end
+    is_test(name) = startswith("$name", "test_")
+    @testset "$name" for name in filter(is_test, names(@__MODULE__; all = true))
+        getfield(@__MODULE__, name)()
     end
     return
 end
@@ -1060,7 +1058,7 @@ end
 
 function _test_chuffed_asset(file, args...)
     filename = joinpath(@__DIR__, "assets", file)
-    ret = MiniZinc.run_flatzinc(Chuffed_jll.fznchuffed, filename, args...)
+    ret = MiniZinc.run_flatzinc(Chuffed_jll.fznchuffed, filename, "-v", args...)
     return replace(ret, "\r\n" => "\n")
 end
 
