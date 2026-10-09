@@ -2491,6 +2491,9 @@ function test_compute_conflict_feasible()
     return
 end
 
-end
+end  # TestMiniZinc
 
-TestMiniZinc.runtests()
+import Test
+Test.@testset "runtests" begin
+    TestMiniZinc.runtests()
+end
