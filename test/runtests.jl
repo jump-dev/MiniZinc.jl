@@ -1058,7 +1058,7 @@ end
 
 function _test_chuffed_asset(file, args...)
     filename = joinpath(@__DIR__, "assets", file)
-    ret = MiniZinc.run_flatzinc(Chuffed_jll.fznchuffed, filename, "-v", args...)
+    ret = MiniZinc.run_flatzinc(Chuffed_jll.fznchuffed, filename, args...)
     return replace(ret, "\r\n" => "\n")
 end
 
