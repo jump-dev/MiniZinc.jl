@@ -195,7 +195,7 @@ function _write_constraint(
 }
     mzn = MiniZincSet(s.set)
     z = _to_string(variables, f.variables[1])
-    strs = [_to_string(variables, f.variables[i.+1]) for i in mzn.fields]
+    strs = [_to_string(variables, f.variables[i .+ 1]) for i in mzn.fields]
     println(io, "constraint $z <-> $(mzn.name)(", join(strs, ", "), ");")
     push!(predicates, mzn.name)
     return
@@ -351,7 +351,7 @@ function _write_constraint(
     s1 = _to_string(variables, f.variables[1])
     t1 = _to_string(variables, f.variables[2])
     ns = _to_string(variables, f.variables[2 .+ (1:s.N)])
-    es = _to_string(variables, f.variables[(2+s.N).+(1:s.E)])
+    es = _to_string(variables, f.variables[(2+s.N) .+ (1:s.E)])
     print(io, "constraint path(", s.N, ", ", s.E, ", ", s.from, ", ")
     println(io, s.to, ", ", s1, ", ", t1, ", ", ns, ", ", es, ");")
     push!(predicates, "path")
