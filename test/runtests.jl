@@ -47,9 +47,6 @@ function test_tee_write()
 end
 
 function test_tee_subprocess()
-    if Sys.iswindows() && VERSION < v"1.12"
-        return # Known issue
-    end
     # `_Tee` must be usable as a `run(pipeline(...))` redirect target, with the
     # process's output landing in both sinks by the time `run` returns.
     file = joinpath(mktempdir(), "stdout.txt")
@@ -1101,9 +1098,6 @@ function test_chuffed_asset_puzzle()
 end
 
 function test_chuffed_asset_einstein()
-    if Sys.iswindows() && VERSION < v"1.12"
-        return # Known issue
-    end
     @test _test_chuffed_asset("einstein.fzn") ==
           "a = array1d(1..5, [5, 4, 3, 1, 2]);\n" *
           "c = array1d(1..5, [3, 4, 5, 1, 2]);\n" *

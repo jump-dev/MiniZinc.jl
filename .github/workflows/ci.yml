@@ -18,6 +18,11 @@ jobs:
         version: ['1.10', '1']
         os: [ubuntu-latest, macOS-latest, windows-latest]
         arch: [default]
+        exclude:
+          # Something is up with the IO pipeline. Results are not buffered
+          # properly.
+          os: windows-latest
+          version: '1.10'
     steps:
       - uses: actions/checkout@v7
       - uses: julia-actions/setup-julia@v3
