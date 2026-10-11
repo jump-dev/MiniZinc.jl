@@ -13,10 +13,7 @@ function Chuffed()
 end
 
 function run_flatzinc(solver_cmd::F, filename, args = String[]) where {F}
-    io = IOBuffer()
-    run(pipeline(`$(solver_cmd()) $(vcat(args, filename))`; stdout = io))
-    seekstart(io)
-    return read(io, String)
+    return read(`$(solver_cmd()) $(vcat(args, filename))`, String)
 end
 
 """
