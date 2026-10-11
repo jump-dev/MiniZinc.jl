@@ -13,10 +13,7 @@ function Chuffed()
 end
 
 function run_flatzinc(solver_cmd::F, filename, args = String[]) where {F}
-    io = IOBuffer()
-    run(pipeline(`$(solver_cmd()) $(vcat(args, filename))`; stdout = io))
-    seekstart(io)
-    return read(io, String)
+    return read(`$(solver_cmd()) $(vcat(args, filename))`, String)
 end
 
 """
@@ -134,11 +131,8 @@ function _run_minizinc(dest::Optimizer)
 end
 
 function MOI.get(model::Optimizer, ::MOI.SolverVersion)
-    output = sprint() do io
-        return _minizinc_exe() do exe
-            return run(pipeline(`$(exe) --version`; stdout = io))
-        end
-    end
+    output = _minizinc_exe(exe -> read(`$(exe) --version`, String))
+    @assert !isempty(output)
     m = match(r"version (\d+.\d+.\d+)", output)::RegexMatch
     return VersionNumber(m[1])
 end
