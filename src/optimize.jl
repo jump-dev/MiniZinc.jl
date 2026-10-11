@@ -131,7 +131,7 @@ function _run_minizinc(dest::Optimizer)
 end
 
 function MOI.get(model::Optimizer, ::MOI.SolverVersion)
-    output = read(`$(_minizinc_exe()) --version`, String)
+    output = _minizinc_exe(exe -> read(`$(exe) --version`, String))
     @assert !isempty(output)
     m = match(r"version (\d+.\d+.\d+)", output)::RegexMatch
     return VersionNumber(m[1])
