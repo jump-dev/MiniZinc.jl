@@ -52,7 +52,10 @@ function test_tee_subprocess()
     file = joinpath(mktempdir(), "stdout.txt")
     mirror = IOBuffer()
     open(file, "w") do io
-        return run(pipeline(`echo hello`; stdout = MiniZinc._Tee(io, mirror)))
+        tee = MiniZinc._Tee(io, mirror)
+        run(pipeline(`echo hello`; stdout = tee))
+        flush(tee)
+        return
     end
     @test read(file, String) == "hello\n"
     @test String(take!(mirror)) == "hello\n"
