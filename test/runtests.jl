@@ -6,17 +6,15 @@
 module TestMiniZinc
 
 using Test
+
 import Chuffed_jll
 import MathOptInterface as MOI
 import MiniZinc
 
 function runtests()
-    for name in names(@__MODULE__; all = true)
-        if startswith("$(name)", "test_")
-            @testset "$(name)" begin
-                getfield(@__MODULE__, name)()
-            end
-        end
+    is_test(name) = startswith("$name", "test_")
+    @testset "$name" for name in filter(is_test, names(@__MODULE__; all = true))
+        getfield(@__MODULE__, name)()
     end
     return
 end
@@ -2493,6 +2491,6 @@ function test_compute_conflict_feasible()
     return
 end
 
-end
+end  # TestMiniZinc
 
 TestMiniZinc.runtests()

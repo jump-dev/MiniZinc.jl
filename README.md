@@ -35,16 +35,15 @@ import Pkg
 Pkg.add("MiniZinc")
 ```
 
-**Windows**
+In addition to installing the MiniZinc.jl package, this will also download and
+install the `libminizinc` binaries. You do not need to install `libminizinc`
+separately.
 
-On Linux and macOS, this package automatically installs `libminizinc`. However,
-we're still working out problems with the install on Windows. To use
-MiniZinc.jl, you'll need to manually install a copy of `libminizinc` from
-[minizinc.org](https://www.minizinc.org) or compile one yourself from
-[MiniZinc/libminizinc](https://github.com/MiniZinc/libminizinc).
+### Manual install
 
-To teach MiniZinc.jl where to look for `libminizinc`, set the
-`JULIA_LIBMINIZINC_DIR` environment variable. For example:
+Install a copy of `libminizinc` from [minizinc.org](https://www.minizinc.org) or
+compile one yourself from [MiniZinc/libminizinc](https://github.com/MiniZinc/libminizinc).
+Then set the `JULIA_LIBMINIZINC_DIR` environment variable. For example:
 ```julia
 ENV["JULIA_LIBMINIZINC_DIR"] = "C:\\Program Files\\MiniZinc"
 ```
