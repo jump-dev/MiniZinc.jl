@@ -1645,6 +1645,35 @@ function test_highs_optimization_time_limit()
     return
 end
 
+function test_highs_optimization_timed_out()
+    # bin packing, highs should find a solution quickly but struggle to
+    # prove optimal, so we hopefully time out
+    n, m = 50, 25
+    w = [(37 * i) % 31 + 26 for i in 1:n]
+    model = MOI.Utilities.Model{Int}()
+    x = [
+        MOI.add_constrained_variable(model, MOI.ZeroOne())[1] for
+        _ in 1:n, _ in 1:m
+    ]
+    y, _ = MOI.add_constrained_variables(model, fill(MOI.ZeroOne(), m))
+    for i in 1:n
+        MOI.add_constraint(model, sum(1 * x[i, j] for j in 1:m), MOI.EqualTo(1))
+    end
+    for j in 1:m
+        f = sum(w[i] * x[i, j] for i in 1:n) - 100 * y[j]
+        MOI.add_constraint(model, f, MOI.LessThan(0))
+    end
+    f = sum(1 * y[j] for j in 1:m)
+    MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+    solver = MiniZinc.Optimizer{Int}("highs")
+    MOI.set(solver, MOI.TimeLimitSec(), 1)
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.PrimalStatus()) == MOI.FEASIBLE_POINT
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.TIME_LIMIT
+    return
+end
+
 function test_highs_optimization_silent()
     model = MOI.Utilities.Model{Float64}()
     x, _ = MOI.add_constrained_variable(model, MOI.Integer())
