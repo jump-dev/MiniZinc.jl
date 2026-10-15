@@ -239,7 +239,7 @@ end
 function _parse_status(ret::String)
     # MiniZinc status are written like `=====STATUS=====` or `==========` 
     # see https://docs.minizinc.org/en/stable/fzn-spec.html#output
-    m_stat = match(r"^=====([A-Za-z]*)=====$"m, ret)
+    m_stat = match(r"^=====([A-Za-z]*)=====\r?$"m, ret)
     if m_stat === nothing
         # has solutions, but stopped early
         return "SATISFIABLE"
