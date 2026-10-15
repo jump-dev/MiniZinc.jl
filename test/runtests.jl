@@ -1611,7 +1611,7 @@ function test_highs_optimization()
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) == 1.0
     @test MOI.get(solver, MOI.ObjectiveValue()) == 1.0
-    @test MOI.get(solver, MOI.RawStatusString()) == "SATISFIABLE"
+    @test MOI.get(solver, MOI.RawStatusString()) == "OPTIMAL"
     return
 end
 
@@ -1642,6 +1642,88 @@ function test_highs_optimization_time_limit()
     MOI.set(solver, MOI.TimeLimitSec(), 100)
     index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    return
+end
+
+function test_highs_optimization_timed_out()
+    # bin packing, highs should find a solution quickly but struggle to
+    # prove optimal, so we hopefully time out
+    n, m = 50, 25
+    w = [(37 * i) % 31 + 26 for i in 1:n]
+    model = MOI.Utilities.Model{Int}()
+    x = [
+        MOI.add_constrained_variable(model, MOI.ZeroOne())[1] for
+        _ in 1:n, _ in 1:m
+    ]
+    y, _ = MOI.add_constrained_variables(model, fill(MOI.ZeroOne(), m))
+    for i in 1:n
+        MOI.add_constraint(model, sum(1 * x[i, j] for j in 1:m), MOI.EqualTo(1))
+    end
+    for j in 1:m
+        f = sum(w[i] * x[i, j] for i in 1:n) - 100 * y[j]
+        MOI.add_constraint(model, f, MOI.LessThan(0))
+    end
+    f = sum(1 * y[j] for j in 1:m)
+    MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+    solver = MiniZinc.Optimizer{Int}("highs")
+    MOI.set(solver, MOI.TimeLimitSec(), 1)
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.PrimalStatus()) == MOI.FEASIBLE_POINT
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.TIME_LIMIT
+    return
+end
+
+function test_chuffed_time_limit_with_solution()
+    # Even weights and an odd capacity: Chuffed finds a packing quickly but
+    # cannot prove it optimal within the time limit.
+    model = MOI.Utilities.Model{Int}()
+    x, _ = MOI.add_constrained_variables(model, fill(MOI.ZeroOne(), 30))
+    f = MOI.ScalarAffineFunction(MOI.ScalarAffineTerm.(2:2:60, x), 0)
+    MOI.add_constraint(model, f, MOI.LessThan(451))
+    MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    solver = MiniZinc.Optimizer{Int}("chuffed")
+    MOI.set(solver, MOI.Silent(), true)
+    MOI.set(solver, MOI.TimeLimitSec(), 1)
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.PrimalStatus()) == MOI.FEASIBLE_POINT
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.TIME_LIMIT
+    @test MOI.get(solver, MOI.RawStatusString()) == "SATISFIABLE"
+    return
+end
+
+function test_highs_unbounded()
+    # HiGHS can prove a continuous model unbounded
+    model = MOI.Utilities.Model{Float64}()
+    x = MOI.add_variable(model)
+    MOI.add_constraint(model, x, MOI.GreaterThan(0.0))
+    MOI.set(model, MOI.ObjectiveFunction{MOI.VariableIndex}(), x)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    solver = MiniZinc.Optimizer{Float64}("highs")
+    MOI.set(solver, MOI.Silent(), true)
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.DUAL_INFEASIBLE
+    @test MOI.get(solver, MOI.PrimalStatus()) == MOI.NO_SOLUTION
+    @test MOI.get(solver, MOI.RawStatusString()) == "UNBOUNDED"
+    return
+end
+
+function test_highs_infeasible_or_unbounded()
+    # For an integer model, the HiGHS MIP solver cannot tell unbounded from
+    # infeasible, so MiniZinc prints `=====UNSATorUNBOUNDED=====`.
+    model = MOI.Utilities.Model{Int}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.add_constraint(model, x, MOI.GreaterThan(0))
+    MOI.set(model, MOI.ObjectiveFunction{MOI.VariableIndex}(), x)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    solver = MiniZinc.Optimizer{Int}("highs")
+    MOI.set(solver, MOI.Silent(), true)
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) ==
+          MOI.INFEASIBLE_OR_UNBOUNDED
+    @test MOI.get(solver, MOI.PrimalStatus()) == MOI.NO_SOLUTION
+    @test MOI.get(solver, MOI.RawStatusString()) == "UNSATorUNBOUNDED"
     return
 end
 

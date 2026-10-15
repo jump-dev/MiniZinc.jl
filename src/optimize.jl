@@ -236,6 +236,55 @@ function _parse_result(::Type{T}, s::AbstractString) where {T}
     end
 end
 
+function _parse_status(ret::String)
+    # MiniZinc status are written like `=====STATUS=====` or `==========` 
+    # see https://docs.minizinc.org/en/stable/fzn-spec.html#output
+    m_stat = match(r"^=====([A-Za-z]*)=====\r?$"m, ret)
+    if m_stat === nothing
+        # has solutions, but stopped early
+        return "SATISFIABLE"
+    elseif isempty(m_stat[1])
+        # completed the search (ie optimal)
+        return "OPTIMAL"
+    elseif m_stat[1] == "ERROR"
+        # keep the full log for the user
+        return ret
+    else
+        # UNSATISFIABLE, UNBOUNDED, UNSATorUNBOUNDED or UNKNOWN.
+        return m_stat[1]
+    end
+end
+
+function _parse_solutions!(
+    dest::Optimizer{T},
+    src::MOI.ModelLike,
+    ret::String,
+) where {T}
+    variable_map = Dict(
+        MOI.get(dest.inner, MOI.VariableName(), x) => x for
+        x in MOI.get(src, MOI.ListOfVariableIndices())
+    )
+    primal_solution = Dict{MOI.VariableIndex,T}()
+    for line in split(ret, "\n")
+        m_var = match(r"(.+) \= (.+)\;", line)
+        if m_var === nothing
+            if !isempty(primal_solution)
+                # We found a line in the output that is not a variable
+                # statement. It must divide the solutions, so append
+                # the current.
+                push!(dest.primal_solutions, copy(primal_solution))
+                empty!(primal_solution)
+            end
+        elseif m_var[1] == "_objective"
+            dest.primal_objective = _parse_result(T, m_var[2])
+        else
+            x = variable_map[m_var[1]]
+            primal_solution[x] = _parse_result(T, m_var[2])
+        end
+    end
+    return
+end
+
 function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     time_start = time()
     MOI.empty!(dest.inner)
@@ -246,34 +295,9 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     index_map = MOI.copy_to(dest.inner, src)
     ret = _run_minizinc(dest)
     if !isempty(ret)
-        m_stat = match(r"=====(.+)=====", ret)
-        if m_stat !== nothing
-            @assert length(m_stat.captures) == 1
-            dest.solver_status = occursin("ERROR", ret) ? ret : m_stat[1]
-        else
-            dest.solver_status = "SATISFIABLE"
-            variable_map = Dict(
-                MOI.get(dest.inner, MOI.VariableName(), x) => x for
-                x in MOI.get(src, MOI.ListOfVariableIndices())
-            )
-            primal_solution = Dict{MOI.VariableIndex,T}()
-            for line in split(ret, "\n")
-                m_var = match(r"(.+) \= (.+)\;", line)
-                if m_var === nothing
-                    if !isempty(primal_solution)
-                        # We found a line in the output that is not a variable
-                        # statement. It must divide the solutions, so append
-                        # the current.
-                        push!(dest.primal_solutions, copy(primal_solution))
-                        empty!(primal_solution)
-                    end
-                elseif m_var[1] == "_objective"
-                    dest.primal_objective = _parse_result(T, m_var[2])
-                else
-                    x = variable_map[m_var[1]]
-                    primal_solution[x] = _parse_result(T, m_var[2])
-                end
-            end
+        dest.solver_status = _parse_status(ret)
+        if dest.solver_status in ("SATISFIABLE", "OPTIMAL")
+            _parse_solutions!(dest, src, ret)
         end
     end
     dest.solve_time_sec = time() - time_start
@@ -285,25 +309,41 @@ function MOI.is_valid(model::Optimizer, x::MOI.VariableIndex)
 end
 
 function _has_solution(model::Optimizer)
-    return model.solver_status == "SATISFIABLE" &&
+    return model.solver_status in ("SATISFIABLE", "OPTIMAL") &&
            !isempty(model.primal_solutions)
 end
 
 MOI.get(model::Optimizer, ::MOI.RawStatusString) = model.solver_status
 
 function MOI.get(model::Optimizer, ::MOI.TerminationStatus)
-    if model.solver_status == "UNSATISFIABLE"
-        return MOI.INFEASIBLE
-    elseif _has_solution(model)
+    if _has_solution(model)
         num_solutions = something(model.options["num_solutions"], 0)
+        sense = MOI.get(model.inner, MOI.ObjectiveSense())
         if 1 <= num_solutions <= length(model.primal_solutions)
             return MOI.SOLUTION_LIMIT
+        elseif (
+            model.solver_status == "OPTIMAL" || sense == MOI.FEASIBILITY_SENSE
+        )
+            return MOI.OPTIMAL
+        elseif model.time_limit_sec !== nothing
+            # did not complete search, and a time limit does exist,
+            # so it must have timed out
+            return MOI.TIME_LIMIT
+        else
+            return MOI.OTHER_LIMIT
         end
-        return MOI.OPTIMAL
-    elseif model.solver_status == "UNKNOWN" &&
-           model.time_limit_sec !== nothing &&
-           model.solve_time_sec >= model.time_limit_sec
-        return MOI.TIME_LIMIT   # The solver timed out
+    elseif model.solver_status == "UNSATISFIABLE"
+        return MOI.INFEASIBLE
+    elseif model.solver_status == "UNBOUNDED"
+        return MOI.DUAL_INFEASIBLE
+    elseif model.solver_status == "UNSATorUNBOUNDED"
+        return MOI.INFEASIBLE_OR_UNBOUNDED
+    elseif (
+        model.solver_status == "UNKNOWN" &&
+        model.time_limit_sec !== nothing &&
+        model.solve_time_sec >= model.time_limit_sec
+    )
+        return MOI.TIME_LIMIT
     else
         return MOI.OTHER_ERROR
     end
