@@ -316,18 +316,34 @@ end
 MOI.get(model::Optimizer, ::MOI.RawStatusString) = model.solver_status
 
 function MOI.get(model::Optimizer, ::MOI.TerminationStatus)
-    if model.solver_status == "UNSATISFIABLE"
-        return MOI.INFEASIBLE
-    elseif _has_solution(model)
+    if _has_solution(model)
         num_solutions = something(model.options["num_solutions"], 0)
+        sense = MOI.get(model.inner, MOI.ObjectiveSense())
         if 1 <= num_solutions <= length(model.primal_solutions)
             return MOI.SOLUTION_LIMIT
+        elseif (
+            model.solver_status == "OPTIMAL" || sense == MOI.FEASIBILITY_SENSE
+        )
+            return MOI.OPTIMAL
+        elseif model.time_limit_sec !== nothing
+            # did not complete search, and a time limit does exist,
+            # so it must have timed out
+            return MOI.TIME_LIMIT
+        else
+            return MOI.OTHER_LIMIT
         end
-        return MOI.OPTIMAL
-    elseif model.solver_status == "UNKNOWN" &&
-           model.time_limit_sec !== nothing &&
-           model.solve_time_sec >= model.time_limit_sec
-        return MOI.TIME_LIMIT   # The solver timed out
+    elseif model.solver_status == "UNSATISFIABLE"
+        return MOI.INFEASIBLE
+    elseif model.solver_status == "UNBOUNDED"
+        return MOI.DUAL_INFEASIBLE
+    elseif model.solver_status == "UNSATorUNBOUNDED"
+        return MOI.INFEASIBLE_OR_UNBOUNDED
+    elseif (
+        model.solver_status == "UNKNOWN" &&
+        model.time_limit_sec !== nothing &&
+        model.solve_time_sec >= model.time_limit_sec
+    )
+        return MOI.TIME_LIMIT
     else
         return MOI.OTHER_ERROR
     end
