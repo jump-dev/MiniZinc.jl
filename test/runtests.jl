@@ -1674,6 +1674,25 @@ function test_highs_optimization_timed_out()
     return
 end
 
+function test_chuffed_time_limit_with_solution()
+    # Even weights and an odd capacity: Chuffed finds a packing quickly but
+    # cannot prove it optimal within the time limit.
+    model = MOI.Utilities.Model{Int}()
+    x, _ = MOI.add_constrained_variables(model, fill(MOI.ZeroOne(), 30))
+    f = MOI.ScalarAffineFunction(MOI.ScalarAffineTerm.(2:2:60, x), 0)
+    MOI.add_constraint(model, f, MOI.LessThan(451))
+    MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    solver = MiniZinc.Optimizer{Int}("chuffed")
+    MOI.set(solver, MOI.Silent(), true)
+    MOI.set(solver, MOI.TimeLimitSec(), 1)
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.PrimalStatus()) == MOI.FEASIBLE_POINT
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.TIME_LIMIT
+    @test MOI.get(solver, MOI.RawStatusString()) == "SATISFIABLE"
+    return
+end
+
 function test_highs_unbounded()
     # HiGHS can prove a continuous model unbounded
     model = MOI.Utilities.Model{Float64}()
