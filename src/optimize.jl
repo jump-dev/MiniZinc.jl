@@ -236,6 +236,25 @@ function _parse_result(::Type{T}, s::AbstractString) where {T}
     end
 end
 
+function _parse_status(ret::String)
+    # MiniZinc status are written like `=====STATUS=====` or `==========` 
+    # see https://docs.minizinc.org/en/stable/fzn-spec.html#output
+    m_stat = match(r"^=====([A-Za-z]*)=====$"m, ret)
+    if m_stat === nothing
+        # has solutions, but stopped early
+        return "SATISFIABLE"
+    elseif isempty(m_stat[1])
+        # completed the search (ie optimal)
+        return "OPTIMAL"
+    elseif m_stat[1] == "ERROR"
+        # keep the full log for the user
+        return ret
+    else
+        # UNSATISFIABLE, UNBOUNDED, UNSATorUNBOUNDED or UNKNOWN.
+        return m_stat[1]
+    end
+end
+
 function _parse_solutions!(
     dest::Optimizer{T},
     src::MOI.ModelLike,
@@ -276,12 +295,8 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     index_map = MOI.copy_to(dest.inner, src)
     ret = _run_minizinc(dest)
     if !isempty(ret)
-        m_stat = match(r"=====(.+)=====", ret)
-        if m_stat !== nothing
-            @assert length(m_stat.captures) == 1
-            dest.solver_status = occursin("ERROR", ret) ? ret : m_stat[1]
-        else
-            dest.solver_status = "SATISFIABLE"
+        dest.solver_status = _parse_status(ret)
+        if dest.solver_status in ("SATISFIABLE", "OPTIMAL")
             _parse_solutions!(dest, src, ret)
         end
     end
@@ -294,7 +309,7 @@ function MOI.is_valid(model::Optimizer, x::MOI.VariableIndex)
 end
 
 function _has_solution(model::Optimizer)
-    return model.solver_status == "SATISFIABLE" &&
+    return model.solver_status in ("SATISFIABLE", "OPTIMAL") &&
            !isempty(model.primal_solutions)
 end
 
