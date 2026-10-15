@@ -1674,6 +1674,40 @@ function test_highs_optimization_timed_out()
     return
 end
 
+function test_highs_unbounded()
+    # HiGHS can prove a continuous model unbounded
+    model = MOI.Utilities.Model{Float64}()
+    x = MOI.add_variable(model)
+    MOI.add_constraint(model, x, MOI.GreaterThan(0.0))
+    MOI.set(model, MOI.ObjectiveFunction{MOI.VariableIndex}(), x)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    solver = MiniZinc.Optimizer{Float64}("highs")
+    MOI.set(solver, MOI.Silent(), true)
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.DUAL_INFEASIBLE
+    @test MOI.get(solver, MOI.PrimalStatus()) == MOI.NO_SOLUTION
+    @test MOI.get(solver, MOI.RawStatusString()) == "UNBOUNDED"
+    return
+end
+
+function test_highs_infeasible_or_unbounded()
+    # For an integer model, the HiGHS MIP solver cannot tell unbounded from
+    # infeasible, so MiniZinc prints `=====UNSATorUNBOUNDED=====`.
+    model = MOI.Utilities.Model{Int}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.add_constraint(model, x, MOI.GreaterThan(0))
+    MOI.set(model, MOI.ObjectiveFunction{MOI.VariableIndex}(), x)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    solver = MiniZinc.Optimizer{Int}("highs")
+    MOI.set(solver, MOI.Silent(), true)
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) ==
+          MOI.INFEASIBLE_OR_UNBOUNDED
+    @test MOI.get(solver, MOI.PrimalStatus()) == MOI.NO_SOLUTION
+    @test MOI.get(solver, MOI.RawStatusString()) == "UNSATorUNBOUNDED"
+    return
+end
+
 function test_highs_optimization_silent()
     model = MOI.Utilities.Model{Float64}()
     x, _ = MOI.add_constrained_variable(model, MOI.Integer())
