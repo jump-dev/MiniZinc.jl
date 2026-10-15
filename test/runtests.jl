@@ -1611,7 +1611,7 @@ function test_highs_optimization()
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) == 1.0
     @test MOI.get(solver, MOI.ObjectiveValue()) == 1.0
-    @test MOI.get(solver, MOI.RawStatusString()) == "SATISFIABLE"
+    @test MOI.get(solver, MOI.RawStatusString()) == "OPTIMAL"
     return
 end
 
