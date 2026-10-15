@@ -236,6 +236,36 @@ function _parse_result(::Type{T}, s::AbstractString) where {T}
     end
 end
 
+function _parse_solutions!(
+    dest::Optimizer{T},
+    src::MOI.ModelLike,
+    ret::String,
+) where {T}
+    variable_map = Dict(
+        MOI.get(dest.inner, MOI.VariableName(), x) => x for
+        x in MOI.get(src, MOI.ListOfVariableIndices())
+    )
+    primal_solution = Dict{MOI.VariableIndex,T}()
+    for line in split(ret, "\n")
+        m_var = match(r"(.+) \= (.+)\;", line)
+        if m_var === nothing
+            if !isempty(primal_solution)
+                # We found a line in the output that is not a variable
+                # statement. It must divide the solutions, so append
+                # the current.
+                push!(dest.primal_solutions, copy(primal_solution))
+                empty!(primal_solution)
+            end
+        elseif m_var[1] == "_objective"
+            dest.primal_objective = _parse_result(T, m_var[2])
+        else
+            x = variable_map[m_var[1]]
+            primal_solution[x] = _parse_result(T, m_var[2])
+        end
+    end
+    return
+end
+
 function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     time_start = time()
     MOI.empty!(dest.inner)
@@ -252,28 +282,7 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
             dest.solver_status = occursin("ERROR", ret) ? ret : m_stat[1]
         else
             dest.solver_status = "SATISFIABLE"
-            variable_map = Dict(
-                MOI.get(dest.inner, MOI.VariableName(), x) => x for
-                x in MOI.get(src, MOI.ListOfVariableIndices())
-            )
-            primal_solution = Dict{MOI.VariableIndex,T}()
-            for line in split(ret, "\n")
-                m_var = match(r"(.+) \= (.+)\;", line)
-                if m_var === nothing
-                    if !isempty(primal_solution)
-                        # We found a line in the output that is not a variable
-                        # statement. It must divide the solutions, so append
-                        # the current.
-                        push!(dest.primal_solutions, copy(primal_solution))
-                        empty!(primal_solution)
-                    end
-                elseif m_var[1] == "_objective"
-                    dest.primal_objective = _parse_result(T, m_var[2])
-                else
-                    x = variable_map[m_var[1]]
-                    primal_solution[x] = _parse_result(T, m_var[2])
-                end
-            end
+            _parse_solutions!(dest, src, ret)
         end
     end
     dest.solve_time_sec = time() - time_start
