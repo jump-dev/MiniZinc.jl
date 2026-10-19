@@ -1180,7 +1180,7 @@ function test_moi_infeasible_fzn()
     x = MOI.add_variables(model, 3)
     MOI.add_constraint.(model, x, MOI.Integer())
     MOI.add_constraint.(model, x, MOI.GreaterThan(1))
-    MOI.add_constraint(model, sum(x, init = 0), MOI.LessThan(2))
+    MOI.add_constraint(model, sum(1 .* x), MOI.LessThan(2))
     solver = MiniZinc.Optimizer{Int}("chuffed")
     MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.INFEASIBLE
