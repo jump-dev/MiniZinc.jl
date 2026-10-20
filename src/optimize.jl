@@ -284,6 +284,12 @@ function _parse_solutions!(
             primal_solution[x] = _parse_result(T, m_var[2])
         end
     end
+    if MOI.get(dest.inner, MOI.ObjectiveSense()) != MOI.FEASIBILITY_SENSE
+        # `-i` prints the solutions in order of improvement, but MOI requires
+        # the best solution to be first
+        reverse!(dest.primal_solutions)
+        reverse!(dest.primal_objectives)
+    end
     return
 end
 
