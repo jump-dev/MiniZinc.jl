@@ -100,6 +100,13 @@ function _run_minizinc(dest::Optimizer)
             if dest.options["num_solutions"] !== nothing
                 cmd = `$cmd --num-solutions $(dest.options["num_solutions"])`
             end
+            # Some solvers (CP-SAT) dont support a time limit flag.
+            # Therefore, minizinc just terminates them whenever they exceed
+            # the timelimit. If we dont add `-i`, then CP-SAT only prints
+            # the final, optimal solution, which gets completely lost if minizinc
+            # killed it early. A side effect of adding `-i` is that we now
+            # save and report every intermediate solution.
+            cmd = `$cmd -i`
             if !dest.silent
                 cmd = `$cmd --verbose-solving`
             end
