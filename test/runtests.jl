@@ -1773,6 +1773,41 @@ function test_chuffed_termination_status()
     return
 end
 
+function test_chuffed_solution_limit_optimization()
+    # `--num-solutions` does not limit the improving solutions printed by `-i`,
+    # so more results than the limit is not SOLUTION_LIMIT. 6-mark Golomb ruler,
+    # optimal length 17.
+    n = 6
+    model = MOI.Utilities.Model{Int}()
+    mark = [MOI.add_constrained_variable(model, MOI.Integer())[1] for _ in 1:n]
+    MOI.add_constraint(model, mark[1], MOI.EqualTo(0))
+    MOI.add_constraint.(model, mark[2:n], MOI.Interval(1, n^2))
+    for i in 1:(n-1)
+        MOI.add_constraint(model, 1 * mark[i+1] - mark[i], MOI.GreaterThan(1))
+    end
+    pairs = [(i, j) for i in 1:n for j in (i+1):n]
+    diff =
+        [MOI.add_constrained_variable(model, MOI.Integer())[1] for _ in pairs]
+    MOI.add_constraint.(model, diff, MOI.Interval(1, n^2))
+    for (k, (i, j)) in enumerate(pairs)
+        f = 1 * diff[k] - mark[j] + mark[i]
+        MOI.add_constraint(model, f, MOI.EqualTo(0))
+    end
+    f = MOI.VectorOfVariables(diff)
+    MOI.add_constraint(model, f, MOI.AllDifferent(length(diff)))
+    MOI.set(model, MOI.ObjectiveFunction{typeof(mark[n])}(), mark[n])
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+    solver = MiniZinc.Optimizer{Int}("chuffed")
+    MOI.set(solver, MOI.Silent(), true)
+    MOI.set(solver, MOI.SolutionLimit(), 1)
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.ResultCount()) > 1
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ObjectiveValue()) == 17
+    @test MOI.get(solver, MOI.VariablePrimal(), index_map[mark[n]]) == 17
+    return
+end
+
 function test_highs_unbounded()
     # HiGHS can prove a continuous model unbounded
     model = MOI.Utilities.Model{Float64}()
