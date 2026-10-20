@@ -25,7 +25,7 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
     solver::String
     inner::Model{T}
     solver_status::String
-    primal_objective::T
+    primal_objectives::Vector{T}
     primal_solutions::Vector{Dict{MOI.VariableIndex,T}}
     options::Dict{String,Any}
     silent::Bool
@@ -48,7 +48,7 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
             solver,
             Model{T}(),
             "",
-            zero(T),
+            T[],
             primal_solutions,
             options,
             false,
@@ -147,7 +147,7 @@ function MOI.empty!(model::Optimizer{T}) where {T}
     MOI.empty!(model.inner)
     empty!(model.inner.ext)
     model.solver_status = ""
-    model.primal_objective = zero(T)
+    empty!(model.primal_objectives)
     empty!(model.primal_solutions)
     model.solve_time_sec = NaN
     model.conflict_status = MOI.COMPUTE_CONFLICT_NOT_CALLED
@@ -265,6 +265,7 @@ function _parse_solutions!(
         x in MOI.get(src, MOI.ListOfVariableIndices())
     )
     primal_solution = Dict{MOI.VariableIndex,T}()
+    objective = zero(T)
     for line in split(ret, "\n")
         m_var = match(r"(.+) \= (.+)\;", line)
         if m_var === nothing
@@ -273,10 +274,11 @@ function _parse_solutions!(
                 # statement. It must divide the solutions, so append
                 # the current.
                 push!(dest.primal_solutions, copy(primal_solution))
+                push!(dest.primal_objectives, objective)
                 empty!(primal_solution)
             end
         elseif m_var[1] == "_objective"
-            dest.primal_objective = _parse_result(T, m_var[2])
+            objective = _parse_result(T, m_var[2])
         else
             x = variable_map[m_var[1]]
             primal_solution[x] = _parse_result(T, m_var[2])
@@ -288,6 +290,7 @@ end
 function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     time_start = time()
     MOI.empty!(dest.inner)
+    empty!(dest.primal_objectives)
     empty!(dest.primal_solutions)
     # A re-solve invalidates any conflict computed for the previous model.
     dest.conflict_status = MOI.COMPUTE_CONFLICT_NOT_CALLED
@@ -369,7 +372,7 @@ MOI.get(model::Optimizer, ::MOI.ResultCount) = length(model.primal_solutions)
 
 function MOI.get(model::Optimizer, attr::MOI.ObjectiveValue)
     MOI.check_result_index_bounds(model, attr)
-    return model.primal_objective
+    return model.primal_objectives[attr.result_index]
 end
 
 function MOI.get(
