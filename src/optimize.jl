@@ -319,12 +319,18 @@ function MOI.get(model::Optimizer, ::MOI.TerminationStatus)
     if _has_solution(model)
         num_solutions = something(model.options["num_solutions"], 0)
         sense = MOI.get(model.inner, MOI.ObjectiveSense())
-        if 1 <= num_solutions <= length(model.primal_solutions)
-            return MOI.SOLUTION_LIMIT
-        elseif (
-            model.solver_status == "OPTIMAL" || sense == MOI.FEASIBILITY_SENSE
-        )
+        if model.solver_status == "OPTIMAL"
+            # completed the search
             return MOI.OPTIMAL
+        elseif sense == MOI.FEASIBILITY_SENSE && num_solutions == 0
+            # no solution limit, so stopped after the first solution
+            return MOI.OPTIMAL
+        elseif (
+            sense == MOI.FEASIBILITY_SENSE &&
+            num_solutions <= length(model.primal_solutions)
+        )
+            # solution limits are only enforced for satisfaction problems
+            return MOI.SOLUTION_LIMIT
         elseif model.time_limit_sec !== nothing
             # did not complete search, and a time limit does exist,
             # so it must have timed out
