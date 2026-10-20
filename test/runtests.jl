@@ -1686,10 +1686,15 @@ function test_chuffed_time_limit_with_solution()
     solver = MiniZinc.Optimizer{Int}("chuffed")
     MOI.set(solver, MOI.Silent(), true)
     MOI.set(solver, MOI.TimeLimitSec(), 1)
-    MOI.optimize!(solver, model)
+    index_map, _ = MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.PrimalStatus()) == MOI.FEASIBLE_POINT
     @test MOI.get(solver, MOI.TerminationStatus()) == MOI.TIME_LIMIT
     @test MOI.get(solver, MOI.RawStatusString()) == "SATISFIABLE"
+    # the objective of each result matches its own solution
+    for k in 1:MOI.get(solver, MOI.ResultCount())
+        y = [MOI.get(solver, MOI.VariablePrimal(k), index_map[xi]) for xi in x]
+        @test MOI.get(solver, MOI.ObjectiveValue(k)) == sum((2:2:60) .* y)
+    end
     return
 end
 
@@ -2194,8 +2199,17 @@ function test_example_packing()
     MOI.optimize!(model)
     @test MOI.get(model, MOI.TerminationStatus()) === MOI.OPTIMAL
     @test MOI.get(model, MOI.PrimalStatus()) === MOI.FEASIBLE_POINT
-    @test MOI.get(model, MOI.ResultCount()) == 1
     @test MOI.get(model, MOI.ObjectiveValue()) == 120
+    # `-i` returns every improving solution, ordered from best to worst
+    n_results = MOI.get(model, MOI.ResultCount())
+    @test n_results > 1
+    objectives = [MOI.get(model, MOI.ObjectiveValue(k)) for k in 1:n_results]
+    @test issorted(objectives)
+    for k in 1:n_results
+        mx = MOI.get(model, MOI.VariablePrimal(k), max_x)
+        my = MOI.get(model, MOI.VariablePrimal(k), max_y)
+        @test objectives[k] == mx * my
+    end
     rm("test_packing.mzn")
     return
 end
