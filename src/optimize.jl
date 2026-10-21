@@ -93,6 +93,8 @@ function _run_minizinc(dest::Optimizer)
     try
         _minizinc_exe() do exe
             cmd = `$(exe) --solver $(dest.solver) --output-objective -o $(output) $(filename)`
+            # `-s` makes solvers report statistics, such as the objective bound
+            cmd = `$cmd -s`
             if dest.time_limit_sec !== nothing
                 limit = round(Int, 1_000 * dest.time_limit_sec::Float64)
                 cmd = `$cmd --time-limit $limit`
