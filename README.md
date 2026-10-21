@@ -133,6 +133,13 @@ path = joinpath(ORTools_jll.artifact_dir, "share", "minizinc", "solvers", "cp-sa
 model = Model(() -> MiniZinc.Optimizer{Float64}(path))
 ```
 
+If CP-SAT times out, MiniZinc will terminate the solve without getting the
+best solution. To fix this, you must set `MiniZinc.AllSolutions()` to `true`.
+```julia
+set_time_limit_sec(model, 10)
+set_attribute(model, MiniZinc.AllSolutions(), true)
+```
+
 ## MathOptInterface API
 
 The MiniZinc `Optimizer{T}` supports the following constraints and attributes.
@@ -244,3 +251,7 @@ Set options using [`MOI.RawOptimizerAttribute`](@ref) in MOI or
 
  * [`MOI.SolutionLimit`](@ref): set this option to a positive integer to return
    up to the `limit` number of solutions.
+
+ * `MiniZinc.AllSolutions()`: set this option to `true` to return all
+   solutions of a satisfaction problem (up to `MOI.SolutionLimit`), or every
+   improving solution of an optimization problem. This is the `-a` flag of MiniZinc.
