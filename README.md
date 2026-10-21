@@ -244,3 +244,9 @@ Set options using [`MOI.RawOptimizerAttribute`](@ref) in MOI or
 
  * [`MOI.SolutionLimit`](@ref): set this option to a positive integer to return
    up to the `limit` number of solutions.
+
+ * Any option starting with `-` is passed to the `minizinc` command as a flag.
+   A value of `true` passes the flag on its own, `false` or `nothing` omits
+   it, and any other value is passed after the flag. For example,
+   `set_attribute(model, "--random-seed", 1)` passes `--random-seed 1`, and
+   `set_attribute(model, "--free-search", true)` passes `--free-search`.
