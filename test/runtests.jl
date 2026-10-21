@@ -1158,6 +1158,40 @@ function test_moi_support_solution_limit()
     return
 end
 
+function test_raw_flags()
+    model = MOI.Utilities.Model{Int}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Interval(1, 3))
+    MOI.add_constraint(model, x, MOI.Integer())
+    # options starting with `-` are supported
+    solver = MiniZinc.Optimizer{Int}("chuffed")
+    @test MOI.supports(solver, MOI.RawOptimizerAttribute("--free-search"))
+    @test !MOI.supports(solver, MOI.RawOptimizerAttribute("free-search"))
+    # a flag with a value is passed as `--random-seed 1`
+    MOI.set(solver, MOI.RawOptimizerAttribute("--random-seed"), 1)
+    @test MOI.get(solver, MOI.RawOptimizerAttribute("--random-seed")) == 1
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.OPTIMAL
+    # an invalid value is passed through, so minizinc errors
+    solver = MiniZinc.Optimizer{Int}("chuffed")
+    MOI.set(solver, MOI.Silent(), true)
+    MOI.set(solver, MOI.RawOptimizerAttribute("--random-seed"), "abc")
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.OTHER_ERROR
+    # `true` passes the flag on its own, so an unknown flag errors
+    solver = MiniZinc.Optimizer{Int}("chuffed")
+    MOI.set(solver, MOI.Silent(), true)
+    MOI.set(solver, MOI.RawOptimizerAttribute("--not-a-flag"), true)
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.OTHER_ERROR
+    # `false` and `nothing` omit the flag
+    for value in (false, nothing)
+        MOI.set(solver, MOI.RawOptimizerAttribute("--not-a-flag"), value)
+        MOI.optimize!(solver, model)
+        @test MOI.get(solver, MOI.TerminationStatus()) == MOI.OPTIMAL
+    end
+    return
+end
+
 function test_moi_var_domain_infeasible_fzn()
     model = MOI.Utilities.Model{Int}()
     x, x_int = MOI.add_constrained_variable(model, MOI.Integer())

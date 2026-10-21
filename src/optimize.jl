@@ -100,6 +100,16 @@ function _run_minizinc(dest::Optimizer)
             if dest.options["num_solutions"] !== nothing
                 cmd = `$cmd --num-solutions $(dest.options["num_solutions"])`
             end
+            # raw options starting with `-` are passed to minizinc as flags
+            for (key, value) in dest.options
+                if startswith(key, "-") && !isnothing(value)
+                    if !(value isa Bool)
+                        cmd = `$cmd $key $value`
+                    elseif value
+                        cmd = `$cmd $key`
+                    end
+                end
+            end
             if !dest.silent
                 cmd = `$cmd --verbose-solving`
             end
@@ -156,7 +166,7 @@ function MOI.empty!(model::Optimizer{T}) where {T}
 end
 
 function MOI.supports(model::Optimizer, attr::MOI.RawOptimizerAttribute)
-    return haskey(model.options, attr.name)
+    return haskey(model.options, attr.name) || startswith(attr.name, "-")
 end
 
 function MOI.get(model::Optimizer, attr::MOI.RawOptimizerAttribute)
