@@ -1158,6 +1158,21 @@ function test_moi_support_solution_limit()
     return
 end
 
+function test_moi_support_all_solutions()
+    solver = MiniZinc.Optimizer{Int}("chuffed")
+    @test MOI.supports(solver, MiniZinc.AllSolutions())
+    attr = MOI.RawOptimizerAttribute("all_solutions")
+    @test MOI.supports(solver, attr)
+    @test MOI.get(solver, MiniZinc.AllSolutions()) == false
+    @test MOI.get(solver, attr) == false
+    MOI.set(solver, MiniZinc.AllSolutions(), true)
+    @test MOI.get(solver, attr) == true
+    @test MOI.get(solver, MiniZinc.AllSolutions()) == true
+    MOI.set(solver, attr, false)
+    @test MOI.get(solver, MiniZinc.AllSolutions()) == false
+    return
+end
+
 function test_moi_var_domain_infeasible_fzn()
     model = MOI.Utilities.Model{Int}()
     x, x_int = MOI.add_constrained_variable(model, MOI.Integer())

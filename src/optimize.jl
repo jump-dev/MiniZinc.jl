@@ -42,8 +42,11 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
             solver = Chuffed()
         end
         primal_solutions = Dict{MOI.VariableIndex,T}[]
-        options =
-            Dict{String,Any}("model_filename" => "", "num_solutions" => nothing)
+        options = Dict{String,Any}(
+            "model_filename" => "",
+            "num_solutions" => nothing,
+            "all_solutions" => false,
+        )
         return new(
             solver,
             Model{T}(),
@@ -195,6 +198,29 @@ function MOI.set(
         throw(MOI.SetAttributeNotAllowed(attr, msg))
     end
     model.options["num_solutions"] = value
+    return
+end
+
+"""
+    AllSolutions() <: MOI.AbstractOptimizerAttribute
+
+An optimizer attribute to report all solutions found by the solver. Maps to
+the `-a` flag in MiniZinc. This is `false` by default.
+
+When `true`, satisfaction problems report and solve for every solution (up to
+[`MOI.SolutionLimit`](@ref)) and optimization problems report every improving
+solution.
+"""
+struct AllSolutions <: MOI.AbstractOptimizerAttribute end
+
+MOI.supports(::Optimizer, ::AllSolutions) = true
+
+function MOI.get(model::Optimizer, ::AllSolutions)
+    return MOI.get(model, MOI.RawOptimizerAttribute("all_solutions"))
+end
+
+function MOI.set(model::Optimizer, ::AllSolutions, value::Bool)
+    model.options["all_solutions"] = value
     return
 end
 
