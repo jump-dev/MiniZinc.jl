@@ -1674,6 +1674,68 @@ function test_highs_optimization_timed_out()
     return
 end
 
+function test_parse_objective_bound()
+    # statistics reported by CP-SAT with `-s`
+    ret = """
+    %%%mzn-stat: objective=76
+    %%%mzn-stat: objectiveBound=31
+    %%%mzn-stat-end
+    _objective = 76;
+    ----------
+    %%%mzn-stat: objective=74
+    %%%mzn-stat: objectiveBound=33
+    %%%mzn-stat-end
+    _objective = 74;
+    ----------
+    """
+    @test MiniZinc._parse_objective_bound(Int, ret) === 33
+    @test MiniZinc._parse_objective_bound(Float64, ret) === 33.0
+    ret = "_objective = 74;\n"
+    @test MiniZinc._parse_objective_bound(Int, ret) === nothing
+    # an infinite bound is no bound, as reported by HiGHS before it has one
+    ret = "%%%mzn-stat: objectiveBound=-infinity\n"
+    @test MiniZinc._parse_objective_bound(Int, ret) === nothing
+    @test MiniZinc._parse_objective_bound(Float64, ret) === nothing
+    # a bound that is not a `T` is ignored
+    ret = "%%%mzn-stat: objectiveBound=20.5\n"
+    @test MiniZinc._parse_objective_bound(Int, ret) === nothing
+    @test MiniZinc._parse_objective_bound(Float64, ret) === 20.5
+    return
+end
+
+function test_chuffed_objective_bound()
+    # Chuffed does not report a bound, but completing the search proves the
+    # objective value is the bound
+    model = MOI.Utilities.Model{Int}()
+    x, _ = MOI.add_constrained_variables(model, fill(MOI.Interval(1, 3), 2))
+    MOI.add_constraint.(model, x, MOI.Integer())
+    f = 1 * x[1] + x[2]
+    MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    solver = MiniZinc.Optimizer{Int}("chuffed")
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ObjectiveBound()) === 6
+    # knapsack with even weights and an odd capacity: Chuffed times out
+    # without proving optimality, so there is no bound
+    model = MOI.Utilities.Model{Int}()
+    x, _ = MOI.add_constrained_variables(model, fill(MOI.ZeroOne(), 30))
+    f = MOI.ScalarAffineFunction(MOI.ScalarAffineTerm.(2:2:60, x), 0)
+    MOI.add_constraint(model, f, MOI.LessThan(451))
+    MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    solver = MiniZinc.Optimizer{Int}("chuffed")
+    MOI.set(solver, MOI.Silent(), true)
+    MOI.set(solver, MOI.TimeLimitSec(), 1)
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.TIME_LIMIT
+    @test_throws(
+        MOI.GetAttributeNotAllowed,
+        MOI.get(solver, MOI.ObjectiveBound()),
+    )
+    return
+end
+
 function test_chuffed_time_limit_with_solution()
     # Even weights and an odd capacity: Chuffed finds a packing quickly but
     # cannot prove it optimal within the time limit.
