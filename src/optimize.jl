@@ -290,15 +290,33 @@ function _parse_solutions!(
     return
 end
 
-function _parse_objective_bound(::Type{T}, ret::String) where {T}
+function _round_bound(
+    ::Type{T},
+    bound,
+    sense::MOI.OptimizationSense,
+) where {T<:Integer}
+    # all variables and coefficients are integer, so the objective is integer,
+    # and the bound can be rounded towards it
+    return T(sense == MOI.MAX_SENSE ? floor(bound) : ceil(bound))
+end
+
+# fallback when T is not integer
+_round_bound(::Type{T}, bound, ::MOI.OptimizationSense) where {T} = T(bound)
+
+function _parse_objective_bound(
+    ::Type{T},
+    sense::MOI.OptimizationSense,
+    ret::String,
+) where {T}
     # solvers that determine a bound report it as an `objectiveBound` statistic
     # with each solution. keep the last finite one that parsed successfully,
-    # which should be the tightest.
+    # which should be the tightest. the statistic can be a float, see
+    # https://docs.minizinc.dev/en/stable/fzn-spec.html#statistics-output
     bound = nothing
     for m in eachmatch(r"^%%%mzn-stat: objectiveBound=(.+?)\r?$"m, ret)
-        value = tryparse(T, m[1])
+        value = tryparse(Float64, m[1])
         if value !== nothing && isfinite(value)
-            bound = value
+            bound = _round_bound(T, value, sense)
         end
     end
     return bound
@@ -313,7 +331,8 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     empty!(dest.conflict_constraints)
     index_map = MOI.copy_to(dest.inner, src)
     ret = _run_minizinc(dest)
-    dest.objective_bound = _parse_objective_bound(T, ret)
+    sense = MOI.get(dest.inner, MOI.ObjectiveSense())
+    dest.objective_bound = _parse_objective_bound(T, sense, ret)
     if !isempty(ret)
         dest.solver_status = _parse_status(ret)
         if dest.solver_status in ("SATISFIABLE", "OPTIMAL")

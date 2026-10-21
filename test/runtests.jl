@@ -1688,18 +1688,23 @@ function test_parse_objective_bound()
     _objective = 74;
     ----------
     """
-    @test MiniZinc._parse_objective_bound(Int, ret) === 33
-    @test MiniZinc._parse_objective_bound(Float64, ret) === 33.0
-    ret = "_objective = 74;\n"
-    @test MiniZinc._parse_objective_bound(Int, ret) === nothing
+    parse_bound(T, sense, ret) = MiniZinc._parse_objective_bound(T, sense, ret)
+    @test parse_bound(Int, MOI.MIN_SENSE, ret) === 33
+    @test parse_bound(Float64, MOI.MIN_SENSE, ret) === 33.0
+    @test parse_bound(Int, MOI.MIN_SENSE, "_objective = 74;\n") === nothing
     # an infinite bound is no bound, as reported by HiGHS before it has one
     ret = "%%%mzn-stat: objectiveBound=-infinity\n"
-    @test MiniZinc._parse_objective_bound(Int, ret) === nothing
-    @test MiniZinc._parse_objective_bound(Float64, ret) === nothing
-    # a bound that is not a `T` is ignored
+    @test parse_bound(Int, MOI.MIN_SENSE, ret) === nothing
+    @test parse_bound(Float64, MOI.MIN_SENSE, ret) === nothing
+    # the bound is a float, so it is rounded towards the objective for an
+    # integer model
     ret = "%%%mzn-stat: objectiveBound=20.5\n"
-    @test MiniZinc._parse_objective_bound(Int, ret) === nothing
-    @test MiniZinc._parse_objective_bound(Float64, ret) === 20.5
+    @test parse_bound(Int, MOI.MIN_SENSE, ret) === 21
+    @test parse_bound(Int, MOI.MAX_SENSE, ret) === 20
+    @test parse_bound(Float64, MOI.MIN_SENSE, ret) === 20.5
+    ret = "%%%mzn-stat: objectiveBound=21.0\n"
+    @test parse_bound(Int, MOI.MIN_SENSE, ret) === 21
+    @test parse_bound(Int, MOI.MAX_SENSE, ret) === 21
     return
 end
 
