@@ -1604,6 +1604,7 @@ function test_highs_optimization()
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) == 10.0
     @test MOI.get(solver, MOI.ObjectiveValue()) == 10.0
+    @test MOI.get(solver, MOI.ObjectiveBound()) === 10
     MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
     solver = MiniZinc.Optimizer{Int}("highs")
     index_map, _ = MOI.optimize!(solver, model)
@@ -1611,6 +1612,7 @@ function test_highs_optimization()
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) == 1.0
     @test MOI.get(solver, MOI.ObjectiveValue()) == 1.0
+    @test MOI.get(solver, MOI.ObjectiveBound()) === 1
     @test MOI.get(solver, MOI.RawStatusString()) == "OPTIMAL"
     return
 end
@@ -1645,6 +1647,26 @@ function test_highs_optimization_time_limit()
     return
 end
 
+function test_highs_lp_objective_bound()
+    # HiGHS reports an objective bound of 0 for an LP, but the search completed,
+    # so the bound is the objective value
+    model = MOI.Utilities.Model{Float64}()
+    set = MOI.Interval(0.0, 10.0)
+    x, _ = MOI.add_constrained_variables(model, fill(set, 2))
+    f = 3.0 * x[1] + 7.0 * x[2]
+    MOI.add_constraint(model, f, MOI.GreaterThan(10.5))
+    f = 2.0 * x[1] + 5.0 * x[2]
+    MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+    solver = MiniZinc.Optimizer{Float64}("highs")
+    MOI.set(solver, MOI.Silent(), true)
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ObjectiveValue()) ≈ 7.0
+    @test MOI.get(solver, MOI.ObjectiveBound()) ≈ 7.0
+    return
+end
+
 function test_highs_optimization_timed_out()
     # bin packing, highs should find a solution quickly but struggle to
     # prove optimal, so we hopefully time out
@@ -1671,6 +1693,11 @@ function test_highs_optimization_timed_out()
     MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.PrimalStatus()) == MOI.FEASIBLE_POINT
     @test MOI.get(solver, MOI.TerminationStatus()) == MOI.TIME_LIMIT
+    # the search did not complete, so the bound is reported by highs. 
+    # it should be at least the LP relaxation bound,
+    # and strictly less than the objective value (assumed we timed out above)
+    bound = MOI.get(solver, MOI.ObjectiveBound())
+    @test sum(w) / 100 <= bound < MOI.get(solver, MOI.ObjectiveValue())
     return
 end
 
