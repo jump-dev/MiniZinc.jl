@@ -1135,6 +1135,48 @@ function test_moi_basic_fzn()
     return
 end
 
+function test_moi_support_cmd_flags()
+    solver = MiniZinc.Optimizer{Int}("chuffed")
+    @test MOI.supports(solver, MiniZinc.CmdFlags())
+    @test MOI.get(solver, MiniZinc.CmdFlags()) == String[]
+    # a string is split on whitespace
+    MOI.set(solver, MiniZinc.CmdFlags(), "-p 4  --free-search")
+    @test MOI.get(solver, MiniZinc.CmdFlags()) == ["-p", "4", "--free-search"]
+    # a vector keeps values that contain spaces
+    flags = ["--highs-dll", "/path with spaces/libhighs.so"]
+    MOI.set(solver, MiniZinc.CmdFlags(), flags)
+    @test MOI.get(solver, MiniZinc.CmdFlags()) == flags
+    MOI.set(solver, MiniZinc.CmdFlags(), "")
+    @test MOI.get(solver, MiniZinc.CmdFlags()) == String[]
+    return
+end
+
+function test_cmd_flags()
+    model = MOI.Utilities.Model{Int}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Interval(1, 3))
+    MOI.add_constraint(model, x, MOI.Integer())
+    # a valid flag with a value is passed through
+    solver = MiniZinc.Optimizer{Int}("chuffed")
+    MOI.set(solver, MiniZinc.CmdFlags(), "--random-seed 1")
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.OPTIMAL
+    # an invalid value is passed through, so minizinc errors
+    solver = MiniZinc.Optimizer{Int}("chuffed")
+    MOI.set(solver, MOI.Silent(), true)
+    MOI.set(solver, MiniZinc.CmdFlags(), "--random-seed abc")
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.OTHER_ERROR
+    # an unknown flag is passed through, so minizinc errors
+    MOI.set(solver, MiniZinc.CmdFlags(), ["--not-a-flag"])
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.OTHER_ERROR
+    # removing the flags solves again
+    MOI.set(solver, MiniZinc.CmdFlags(), String[])
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.OPTIMAL
+    return
+end
+
 function test_moi_support_solution_limit()
     solver = MiniZinc.Optimizer{Int}("chuffed")
     MOI.supports(solver, MOI.SolutionLimit())
