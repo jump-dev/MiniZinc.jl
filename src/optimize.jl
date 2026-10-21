@@ -173,6 +173,9 @@ function MOI.set(model::Optimizer, attr::MOI.RawOptimizerAttribute, value)
     if attr.name == "num_solutions"
         MOI.set(model, MOI.SolutionLimit(), value)
         return
+    elseif attr.name == "all_solutions"
+        MOI.set(model, AllSolutions(), value)
+        return
     end
     model.options[attr.name] = value
     return

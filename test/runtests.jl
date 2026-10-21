@@ -1170,6 +1170,7 @@ function test_moi_support_all_solutions()
     @test MOI.get(solver, MiniZinc.AllSolutions()) == true
     MOI.set(solver, attr, false)
     @test MOI.get(solver, MiniZinc.AllSolutions()) == false
+    @test_throws MOI.SetAttributeNotAllowed MOI.set(solver, attr, "yes")
     return
 end
 
