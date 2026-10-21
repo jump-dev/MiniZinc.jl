@@ -25,7 +25,7 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
     solver::String
     inner::Model{T}
     solver_status::String
-    primal_objective::T
+    primal_objectives::Vector{T}
     primal_solutions::Vector{Dict{MOI.VariableIndex,T}}
     options::Dict{String,Any}
     silent::Bool
@@ -42,13 +42,16 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
             solver = Chuffed()
         end
         primal_solutions = Dict{MOI.VariableIndex,T}[]
-        options =
-            Dict{String,Any}("model_filename" => "", "num_solutions" => nothing)
+        options = Dict{String,Any}(
+            "model_filename" => "",
+            "num_solutions" => nothing,
+            "all_solutions" => false,
+        )
         return new(
             solver,
             Model{T}(),
             "",
-            zero(T),
+            T[],
             primal_solutions,
             options,
             false,
@@ -100,6 +103,9 @@ function _run_minizinc(dest::Optimizer)
             if dest.options["num_solutions"] !== nothing
                 cmd = `$cmd --num-solutions $(dest.options["num_solutions"])`
             end
+            if dest.options["all_solutions"]
+                cmd = `$cmd -a`
+            end
             if !dest.silent
                 cmd = `$cmd --verbose-solving`
             end
@@ -147,7 +153,7 @@ function MOI.empty!(model::Optimizer{T}) where {T}
     MOI.empty!(model.inner)
     empty!(model.inner.ext)
     model.solver_status = ""
-    model.primal_objective = zero(T)
+    empty!(model.primal_objectives)
     empty!(model.primal_solutions)
     model.solve_time_sec = NaN
     model.conflict_status = MOI.COMPUTE_CONFLICT_NOT_CALLED
@@ -166,6 +172,9 @@ end
 function MOI.set(model::Optimizer, attr::MOI.RawOptimizerAttribute, value)
     if attr.name == "num_solutions"
         MOI.set(model, MOI.SolutionLimit(), value)
+        return
+    elseif attr.name == "all_solutions"
+        MOI.set(model, AllSolutions(), value)
         return
     end
     model.options[attr.name] = value
@@ -188,6 +197,29 @@ function MOI.set(
         throw(MOI.SetAttributeNotAllowed(attr, msg))
     end
     model.options["num_solutions"] = value
+    return
+end
+
+"""
+    AllSolutions() <: MOI.AbstractOptimizerAttribute
+
+An optimizer attribute to report all solutions found by the solver. Maps to
+the `-a` flag in MiniZinc. This is `false` by default.
+
+When `true`, satisfaction problems report and solve for every solution (up to
+[`MOI.SolutionLimit`](@ref)) and optimization problems report every improving
+solution.
+"""
+struct AllSolutions <: MOI.AbstractOptimizerAttribute end
+
+MOI.supports(::Optimizer, ::AllSolutions) = true
+
+function MOI.get(model::Optimizer, ::AllSolutions)
+    return MOI.get(model, MOI.RawOptimizerAttribute("all_solutions"))
+end
+
+function MOI.set(model::Optimizer, ::AllSolutions, value::Bool)
+    model.options["all_solutions"] = value
     return
 end
 
@@ -265,6 +297,7 @@ function _parse_solutions!(
         x in MOI.get(src, MOI.ListOfVariableIndices())
     )
     primal_solution = Dict{MOI.VariableIndex,T}()
+    objective = zero(T)
     for line in split(ret, "\n")
         m_var = match(r"(.+) \= (.+)\;", line)
         if m_var === nothing
@@ -273,14 +306,21 @@ function _parse_solutions!(
                 # statement. It must divide the solutions, so append
                 # the current.
                 push!(dest.primal_solutions, copy(primal_solution))
+                push!(dest.primal_objectives, objective)
                 empty!(primal_solution)
             end
         elseif m_var[1] == "_objective"
-            dest.primal_objective = _parse_result(T, m_var[2])
+            objective = _parse_result(T, m_var[2])
         else
             x = variable_map[m_var[1]]
             primal_solution[x] = _parse_result(T, m_var[2])
         end
+    end
+    if MOI.get(dest.inner, MOI.ObjectiveSense()) != MOI.FEASIBILITY_SENSE
+        # `-i` prints the solutions in order of improvement, but MOI requires
+        # the best solution to be first
+        reverse!(dest.primal_solutions)
+        reverse!(dest.primal_objectives)
     end
     return
 end
@@ -288,6 +328,7 @@ end
 function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     time_start = time()
     MOI.empty!(dest.inner)
+    empty!(dest.primal_objectives)
     empty!(dest.primal_solutions)
     # A re-solve invalidates any conflict computed for the previous model.
     dest.conflict_status = MOI.COMPUTE_CONFLICT_NOT_CALLED
@@ -322,12 +363,16 @@ function MOI.get(model::Optimizer, ::MOI.TerminationStatus)
         if model.solver_status == "OPTIMAL"
             # completed the search
             return MOI.OPTIMAL
-        elseif sense == MOI.FEASIBILITY_SENSE && num_solutions == 0
+        elseif (
+            sense == MOI.FEASIBILITY_SENSE &&
+            num_solutions == 0 &&
+            !model.options["all_solutions"]
+        )
             # no solution limit, so stopped after the first solution
             return MOI.OPTIMAL
         elseif (
             sense == MOI.FEASIBILITY_SENSE &&
-            num_solutions <= length(model.primal_solutions)
+            0 < num_solutions <= length(model.primal_solutions)
         )
             # solution limits are only enforced for satisfaction problems
             return MOI.SOLUTION_LIMIT
@@ -369,7 +414,7 @@ MOI.get(model::Optimizer, ::MOI.ResultCount) = length(model.primal_solutions)
 
 function MOI.get(model::Optimizer, attr::MOI.ObjectiveValue)
     MOI.check_result_index_bounds(model, attr)
-    return model.primal_objective
+    return model.primal_objectives[attr.result_index]
 end
 
 function MOI.get(
