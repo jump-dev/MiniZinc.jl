@@ -103,13 +103,9 @@ function _run_minizinc(dest::Optimizer)
             if dest.options["num_solutions"] !== nothing
                 cmd = `$cmd --num-solutions $(dest.options["num_solutions"])`
             end
-            # Some solvers (CP-SAT) dont support a time limit flag.
-            # Therefore, minizinc just terminates them whenever they exceed
-            # the timelimit. If we dont add `-i`, then CP-SAT only prints
-            # the final, optimal solution, which gets completely lost if minizinc
-            # killed it early. A side effect of adding `-i` is that we now
-            # save and report every intermediate solution.
-            cmd = `$cmd -i`
+            if dest.options["all_solutions"]
+                cmd = `$cmd -a`
+            end
             if !dest.silent
                 cmd = `$cmd --verbose-solving`
             end
@@ -364,12 +360,16 @@ function MOI.get(model::Optimizer, ::MOI.TerminationStatus)
         if model.solver_status == "OPTIMAL"
             # completed the search
             return MOI.OPTIMAL
-        elseif sense == MOI.FEASIBILITY_SENSE && num_solutions == 0
+        elseif (
+            sense == MOI.FEASIBILITY_SENSE &&
+            num_solutions == 0 &&
+            !model.options["all_solutions"]
+        )
             # no solution limit, so stopped after the first solution
             return MOI.OPTIMAL
         elseif (
             sense == MOI.FEASIBILITY_SENSE &&
-            num_solutions <= length(model.primal_solutions)
+            0 < num_solutions <= length(model.primal_solutions)
         )
             # solution limits are only enforced for satisfaction problems
             return MOI.SOLUTION_LIMIT
