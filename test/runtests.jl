@@ -1138,16 +1138,11 @@ end
 function test_moi_support_cmd_flags()
     solver = MiniZinc.Optimizer{Int}("chuffed")
     @test MOI.supports(solver, MiniZinc.CmdFlags())
-    @test MOI.get(solver, MiniZinc.CmdFlags()) == String[]
-    # a string is split on whitespace
+    @test MOI.get(solver, MiniZinc.CmdFlags()) == ""
     MOI.set(solver, MiniZinc.CmdFlags(), "-p 4  --free-search")
-    @test MOI.get(solver, MiniZinc.CmdFlags()) == ["-p", "4", "--free-search"]
-    # a vector keeps values that contain spaces
-    flags = ["--highs-dll", "/path with spaces/libhighs.so"]
-    MOI.set(solver, MiniZinc.CmdFlags(), flags)
-    @test MOI.get(solver, MiniZinc.CmdFlags()) == flags
+    @test MOI.get(solver, MiniZinc.CmdFlags()) == "-p 4  --free-search"
     MOI.set(solver, MiniZinc.CmdFlags(), "")
-    @test MOI.get(solver, MiniZinc.CmdFlags()) == String[]
+    @test MOI.get(solver, MiniZinc.CmdFlags()) == ""
     return
 end
 
@@ -1167,11 +1162,11 @@ function test_cmd_flags()
     MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) == MOI.OTHER_ERROR
     # an unknown flag is passed through, so minizinc errors
-    MOI.set(solver, MiniZinc.CmdFlags(), ["--not-a-flag"])
+    MOI.set(solver, MiniZinc.CmdFlags(), "--not-a-flag")
     MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) == MOI.OTHER_ERROR
     # removing the flags solves again
-    MOI.set(solver, MiniZinc.CmdFlags(), String[])
+    MOI.set(solver, MiniZinc.CmdFlags(), "")
     MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) == MOI.OPTIMAL
     return
