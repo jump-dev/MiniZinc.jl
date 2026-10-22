@@ -1732,6 +1732,15 @@ function test_parse_objective_bound()
     ret = "%%%mzn-stat: objectiveBound=21.0\n"
     @test parse_bound(Int, MOI.MIN_SENSE, ret) === 21
     @test parse_bound(Int, MOI.MAX_SENSE, ret) === 21
+    # a bound within tolerance of an integer is snapped to it, even if that is
+    # away from the objective
+    ret = "%%%mzn-stat: objectiveBound=0.9999999999\n"
+    @test parse_bound(Int, MOI.MAX_SENSE, ret) === 1
+    @test parse_bound(Int, MOI.MIN_SENSE, ret) === 1
+    @test parse_bound(Float64, MOI.MAX_SENSE, ret) === 0.9999999999
+    ret = "%%%mzn-stat: objectiveBound=1.0000000001\n"
+    @test parse_bound(Int, MOI.MIN_SENSE, ret) === 1
+    @test parse_bound(Int, MOI.MAX_SENSE, ret) === 1
     return
 end
 

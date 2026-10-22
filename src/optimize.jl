@@ -295,9 +295,14 @@ function _round_bound(
     bound,
     sense::MOI.OptimizationSense,
 ) where {T<:Integer}
-    # all variables and coefficients are integer, so the objective is integer,
-    # and the bound can be rounded towards it
-    return T(sense == MOI.MAX_SENSE ? floor(bound) : ceil(bound))
+    # all variables and coefficients are integer, so the objective is integer.
+    # a bound within tolerance of an integer is snapped to it.
+    # otherwise it is rounded towards the objective.
+    # TODO: what should atol be?
+    if isapprox(round(bound), bound; atol = 1e-6)
+        return round(T, bound)
+    end
+    return sense == MOI.MAX_SENSE ? floor(T, bound) : ceil(T, bound)
 end
 
 # fallback when T is not integer
