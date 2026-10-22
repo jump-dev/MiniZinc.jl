@@ -1169,6 +1169,13 @@ function test_cmd_flags()
     MOI.set(solver, MiniZinc.CmdFlags(), "")
     MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) == MOI.OPTIMAL
+    # a quoted value can contain spaces
+    dir = mkpath(joinpath(mktempdir(), "dir with space"))
+    param_file = joinpath(dir, "opts.mpc")
+    write(param_file, "{\"random-seed\": 1}")
+    MOI.set(solver, MiniZinc.CmdFlags(), "--param-file '$param_file'")
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.OPTIMAL
     return
 end
 

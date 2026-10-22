@@ -105,7 +105,7 @@ function _run_minizinc(dest::Optimizer)
             if !dest.silent
                 cmd = `$cmd --verbose-solving`
             end
-            cmd = `$cmd $(split(dest.cmd_flags))`
+            cmd = `$cmd $(Base.shell_split(dest.cmd_flags))`
             # use `open(...)` blocks so that it always flushes, even on errors
             open(_stdout, "w") do stdout
                 open(_stderr, "w") do err_io
