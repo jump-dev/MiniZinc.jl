@@ -1604,6 +1604,7 @@ function test_highs_optimization()
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) == 10.0
     @test MOI.get(solver, MOI.ObjectiveValue()) == 10.0
+    @test MOI.get(solver, MOI.ObjectiveBound()) === 10
     MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
     solver = MiniZinc.Optimizer{Int}("highs")
     index_map, _ = MOI.optimize!(solver, model)
@@ -1611,6 +1612,7 @@ function test_highs_optimization()
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) == 1.0
     @test MOI.get(solver, MOI.ObjectiveValue()) == 1.0
+    @test MOI.get(solver, MOI.ObjectiveBound()) === 1
     @test MOI.get(solver, MOI.RawStatusString()) == "OPTIMAL"
     return
 end
@@ -1645,6 +1647,26 @@ function test_highs_optimization_time_limit()
     return
 end
 
+function test_highs_lp_objective_bound()
+    # HiGHS reports an objective bound of 0 for an LP, but the search completed,
+    # so the bound is the objective value
+    model = MOI.Utilities.Model{Float64}()
+    set = MOI.Interval(0.0, 10.0)
+    x, _ = MOI.add_constrained_variables(model, fill(set, 2))
+    f = 3.0 * x[1] + 7.0 * x[2]
+    MOI.add_constraint(model, f, MOI.GreaterThan(10.5))
+    f = 2.0 * x[1] + 5.0 * x[2]
+    MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+    solver = MiniZinc.Optimizer{Float64}("highs")
+    MOI.set(solver, MOI.Silent(), true)
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ObjectiveValue()) ≈ 7.0
+    @test MOI.get(solver, MOI.ObjectiveBound()) ≈ 7.0
+    return
+end
+
 function test_highs_optimization_timed_out()
     # bin packing, highs should find a solution quickly but struggle to
     # prove optimal, so we hopefully time out
@@ -1671,6 +1693,87 @@ function test_highs_optimization_timed_out()
     MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.PrimalStatus()) == MOI.FEASIBLE_POINT
     @test MOI.get(solver, MOI.TerminationStatus()) == MOI.TIME_LIMIT
+    # the search did not complete, so the bound is reported by highs. 
+    # it should be at least the LP relaxation bound,
+    # and strictly less than the objective value (assumed we timed out above)
+    bound = MOI.get(solver, MOI.ObjectiveBound())
+    @test sum(w) / 100 <= bound < MOI.get(solver, MOI.ObjectiveValue())
+    return
+end
+
+function test_parse_objective_bound()
+    # statistics reported by CP-SAT with `-s`
+    ret = """
+    %%%mzn-stat: objective=76
+    %%%mzn-stat: objectiveBound=31
+    %%%mzn-stat-end
+    _objective = 76;
+    ----------
+    %%%mzn-stat: objective=74
+    %%%mzn-stat: objectiveBound=33
+    %%%mzn-stat-end
+    _objective = 74;
+    ----------
+    """
+    parse_bound(T, sense, ret) = MiniZinc._parse_objective_bound(T, sense, ret)
+    @test parse_bound(Int, MOI.MIN_SENSE, ret) === 33
+    @test parse_bound(Float64, MOI.MIN_SENSE, ret) === 33.0
+    @test parse_bound(Int, MOI.MIN_SENSE, "_objective = 74;\n") === nothing
+    # an infinite bound is no bound, as reported by HiGHS before it has one
+    ret = "%%%mzn-stat: objectiveBound=-infinity\n"
+    @test parse_bound(Int, MOI.MIN_SENSE, ret) === nothing
+    @test parse_bound(Float64, MOI.MIN_SENSE, ret) === nothing
+    # the bound is a float, so it is rounded towards the objective for an
+    # integer model
+    ret = "%%%mzn-stat: objectiveBound=20.5\n"
+    @test parse_bound(Int, MOI.MIN_SENSE, ret) === 21
+    @test parse_bound(Int, MOI.MAX_SENSE, ret) === 20
+    @test parse_bound(Float64, MOI.MIN_SENSE, ret) === 20.5
+    ret = "%%%mzn-stat: objectiveBound=21.0\n"
+    @test parse_bound(Int, MOI.MIN_SENSE, ret) === 21
+    @test parse_bound(Int, MOI.MAX_SENSE, ret) === 21
+    # a bound within tolerance of an integer is snapped to it, even if that is
+    # away from the objective
+    ret = "%%%mzn-stat: objectiveBound=0.9999999999\n"
+    @test parse_bound(Int, MOI.MAX_SENSE, ret) === 1
+    @test parse_bound(Int, MOI.MIN_SENSE, ret) === 1
+    @test parse_bound(Float64, MOI.MAX_SENSE, ret) === 0.9999999999
+    ret = "%%%mzn-stat: objectiveBound=1.0000000001\n"
+    @test parse_bound(Int, MOI.MIN_SENSE, ret) === 1
+    @test parse_bound(Int, MOI.MAX_SENSE, ret) === 1
+    return
+end
+
+function test_chuffed_objective_bound()
+    # Chuffed does not report a bound, but completing the search proves the
+    # objective value is the bound
+    model = MOI.Utilities.Model{Int}()
+    x, _ = MOI.add_constrained_variables(model, fill(MOI.Interval(1, 3), 2))
+    MOI.add_constraint.(model, x, MOI.Integer())
+    f = 1 * x[1] + x[2]
+    MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    solver = MiniZinc.Optimizer{Int}("chuffed")
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.OPTIMAL
+    @test MOI.get(solver, MOI.ObjectiveBound()) === 6
+    # knapsack with even weights and an odd capacity: Chuffed times out
+    # without proving optimality, so there is no bound
+    model = MOI.Utilities.Model{Int}()
+    x, _ = MOI.add_constrained_variables(model, fill(MOI.ZeroOne(), 30))
+    f = MOI.ScalarAffineFunction(MOI.ScalarAffineTerm.(2:2:60, x), 0)
+    MOI.add_constraint(model, f, MOI.LessThan(451))
+    MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    solver = MiniZinc.Optimizer{Int}("chuffed")
+    MOI.set(solver, MOI.Silent(), true)
+    MOI.set(solver, MOI.TimeLimitSec(), 1)
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.TIME_LIMIT
+    @test_throws(
+        MOI.GetAttributeNotAllowed,
+        MOI.get(solver, MOI.ObjectiveBound()),
+    )
     return
 end
 
