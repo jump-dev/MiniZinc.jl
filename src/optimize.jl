@@ -298,8 +298,8 @@ function _round_bound(
     # all variables and coefficients are integer, so the objective is integer.
     # a bound within tolerance of an integer is snapped to it.
     # otherwise it is rounded towards the objective.
-    # TODO: what should atol be?
-    if isapprox(round(bound), bound; atol = 1e-6)
+    # since isapprox(0, x) is always false, an atol must be provided
+    if isapprox(round(bound), bound; atol = Base.rtoldefault(typeof(bound)))
         return round(T, bound)
     end
     return sense == MOI.MAX_SENSE ? floor(T, bound) : ceil(T, bound)
