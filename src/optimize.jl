@@ -223,8 +223,8 @@ end
 An optimizer attribute for extra flags passed to the `minizinc` command.
 
 Flags that MiniZinc.jl sets itself, like `--num-solutions` and `--time-limit`,
-should be set with their attributes instead,
-since they change how the result is reported.
+should be set with their attributes instead, since they change how the result is
+reported.
 """
 struct CmdFlags <: MOI.AbstractOptimizerAttribute end
 
