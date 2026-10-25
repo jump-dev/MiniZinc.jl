@@ -29,6 +29,7 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
     primal_solutions::Vector{Dict{MOI.VariableIndex,T}}
     options::Dict{String,Any}
     silent::Bool
+    cmd_flags::String
     time_limit_sec::Union{Nothing,Float64}
     solve_time_sec::Float64
     # Conflict (IIS) state, populated by `compute_conflict!`. `conflict_status`
@@ -55,6 +56,7 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
             primal_solutions,
             options,
             false,
+            "",
             nothing,
             NaN,
             MOI.COMPUTE_CONFLICT_NOT_CALLED,
@@ -109,6 +111,7 @@ function _run_minizinc(dest::Optimizer)
             if !dest.silent
                 cmd = `$cmd --verbose-solving`
             end
+            cmd = `$cmd $(Base.shell_split(dest.cmd_flags))`
             # use `open(...)` blocks so that it always flushes, even on errors
             open(_stdout, "w") do stdout
                 open(_stderr, "w") do err_io
@@ -243,6 +246,26 @@ end
 
 function MOI.set(model::Optimizer, ::MOI.TimeLimitSec, ::Nothing)
     model.time_limit_sec = nothing
+    return
+end
+
+"""
+    CmdFlags() <: MOI.AbstractOptimizerAttribute
+
+An optimizer attribute for extra flags passed to the `minizinc` command.
+
+Flags that MiniZinc.jl sets itself, like `--num-solutions` and `--time-limit`,
+should be set with their attributes instead, since they change how the result is
+reported.
+"""
+struct CmdFlags <: MOI.AbstractOptimizerAttribute end
+
+MOI.supports(::Optimizer, ::CmdFlags) = true
+
+MOI.get(model::Optimizer, ::CmdFlags) = model.cmd_flags
+
+function MOI.set(model::Optimizer, ::CmdFlags, flags::AbstractString)
+    model.cmd_flags = String(flags)
     return
 end
 

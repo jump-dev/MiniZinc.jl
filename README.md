@@ -249,6 +249,11 @@ Set options using [`MOI.RawOptimizerAttribute`](@ref) in MOI or
    file during optimization. This option can be helpful during debugging. If
    left empty, a temporary file will be used instead.
 
+ * `MiniZinc.CmdFlags()`: set this option to pass extra flags to the
+   `minizinc` command, such as `"-p 4 --free-search"`. 
+   Flags that MiniZinc.jl sets itself, like `--num-solutions` and `--time-limit`,
+   should be set with their options instead.
+
  * [`MOI.SolutionLimit`](@ref): set this option to a positive integer to return
    up to the `limit` number of solutions.
 
