@@ -1715,32 +1715,24 @@ function test_parse_objective_bound()
     _objective = 74;
     ----------
     """
-    parse_bound(T, sense, ret) = MiniZinc._parse_objective_bound(T, sense, ret)
-    @test parse_bound(Int, MOI.MIN_SENSE, ret) === 33
-    @test parse_bound(Float64, MOI.MIN_SENSE, ret) === 33.0
-    @test parse_bound(Int, MOI.MIN_SENSE, "_objective = 74;\n") === nothing
+    @test MiniZinc._parse_objective_bound(ret) === 33.0
+    @test MiniZinc._parse_objective_bound("_objective = 74;\n") === nothing
     # an infinite bound is no bound, as reported by HiGHS before it has one
     ret = "%%%mzn-stat: objectiveBound=-infinity\n"
-    @test parse_bound(Int, MOI.MIN_SENSE, ret) === nothing
-    @test parse_bound(Float64, MOI.MIN_SENSE, ret) === nothing
-    # the bound is a float, so it is rounded towards the objective for an
-    # integer model
+    @test MiniZinc._parse_objective_bound(ret) === nothing
+    # the bound is reported as is, without rounding
     ret = "%%%mzn-stat: objectiveBound=20.5\n"
-    @test parse_bound(Int, MOI.MIN_SENSE, ret) === 21
-    @test parse_bound(Int, MOI.MAX_SENSE, ret) === 20
-    @test parse_bound(Float64, MOI.MIN_SENSE, ret) === 20.5
-    ret = "%%%mzn-stat: objectiveBound=21.0\n"
-    @test parse_bound(Int, MOI.MIN_SENSE, ret) === 21
-    @test parse_bound(Int, MOI.MAX_SENSE, ret) === 21
-    # a bound within tolerance of an integer is snapped to it, even if that is
-    # away from the objective
-    ret = "%%%mzn-stat: objectiveBound=0.9999999999\n"
-    @test parse_bound(Int, MOI.MAX_SENSE, ret) === 1
-    @test parse_bound(Int, MOI.MIN_SENSE, ret) === 1
-    @test parse_bound(Float64, MOI.MAX_SENSE, ret) === 0.9999999999
-    ret = "%%%mzn-stat: objectiveBound=1.0000000001\n"
-    @test parse_bound(Int, MOI.MIN_SENSE, ret) === 1
-    @test parse_bound(Int, MOI.MAX_SENSE, ret) === 1
+    @test MiniZinc._parse_objective_bound(ret) === 20.5
+    return
+end
+
+function test_objective_bound_not_integer()
+    # a non-integer bound cannot be converted for an integer model
+    model = MiniZinc.Optimizer{Int}("highs")
+    model.objective_bound = 20.5
+    @test_throws InexactError MOI.get(model, MOI.ObjectiveBound())
+    model.objective_bound = 21.0
+    @test MOI.get(model, MOI.ObjectiveBound()) === 21
     return
 end
 

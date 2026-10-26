@@ -31,7 +31,7 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
     silent::Bool
     time_limit_sec::Union{Nothing,Float64}
     solve_time_sec::Float64
-    objective_bound::Union{Nothing,T}
+    objective_bound::Union{Nothing,Float64}
     # Conflict (IIS) state, populated by `compute_conflict!`. `conflict_status`
     # tracks whether a conflict computation ran and its outcome;
     # `conflict_constraints` holds the inner `ConstraintIndex`es that findMUS
@@ -290,29 +290,7 @@ function _parse_solutions!(
     return
 end
 
-function _round_bound(
-    ::Type{T},
-    bound,
-    sense::MOI.OptimizationSense,
-) where {T<:Integer}
-    # all variables and coefficients are integer, so the objective is integer.
-    # a bound within tolerance of an integer is snapped to it.
-    # otherwise it is rounded towards the objective.
-    # since isapprox(0, x) is always false, an atol must be provided
-    if isapprox(round(bound), bound; atol = Base.rtoldefault(typeof(bound)))
-        return round(T, bound)
-    end
-    return sense == MOI.MAX_SENSE ? floor(T, bound) : ceil(T, bound)
-end
-
-# fallback when T is not integer
-_round_bound(::Type{T}, bound, ::MOI.OptimizationSense) where {T} = T(bound)
-
-function _parse_objective_bound(
-    ::Type{T},
-    sense::MOI.OptimizationSense,
-    ret::String,
-) where {T}
+function _parse_objective_bound(ret::String)
     # solvers that determine a bound report it as an `objectiveBound` statistic
     # with each solution. keep the last finite one that parsed successfully,
     # which should be the tightest. the statistic can be a float, see
@@ -321,7 +299,7 @@ function _parse_objective_bound(
     for m in eachmatch(r"^%%%mzn-stat: objectiveBound=(.+?)\r?$"m, ret)
         value = tryparse(Float64, m[1])
         if value !== nothing && isfinite(value)
-            bound = _round_bound(T, value, sense)
+            bound = value
         end
     end
     return bound
@@ -336,8 +314,7 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     empty!(dest.conflict_constraints)
     index_map = MOI.copy_to(dest.inner, src)
     ret = _run_minizinc(dest)
-    sense = MOI.get(dest.inner, MOI.ObjectiveSense())
-    dest.objective_bound = _parse_objective_bound(T, sense, ret)
+    dest.objective_bound = _parse_objective_bound(ret)
     if !isempty(ret)
         dest.solver_status = _parse_status(ret)
         if dest.solver_status in ("SATISFIABLE", "OPTIMAL")
@@ -428,12 +405,13 @@ end
 
 MOI.get(model::Optimizer, ::MOI.SolveTimeSec) = model.solve_time_sec
 
-function MOI.get(model::Optimizer, attr::MOI.ObjectiveBound)
+function MOI.get(model::Optimizer{T}, attr::MOI.ObjectiveBound) where {T}
     if model.solver_status == "OPTIMAL"
         # completed the search, so the bound is the objective value
         return MOI.get(model, MOI.ObjectiveValue())
     elseif model.objective_bound !== nothing
-        return model.objective_bound
+        # throws an InexactError if the bound is not representable in T
+        return convert(T, model.objective_bound)
     end
     msg = "the solver did not report an objective bound"
     return throw(MOI.GetAttributeNotAllowed(attr, msg))
