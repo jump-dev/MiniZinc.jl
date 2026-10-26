@@ -504,6 +504,16 @@ function _write_expression(io::IO, ::Set, ::Dict, x::Real)
     return
 end
 
+function _write_expression(
+    io::IO,
+    ::Set,
+    variables::Dict,
+    f::Union{MOI.ScalarAffineFunction,MOI.ScalarQuadraticFunction},
+)
+    print(io, "(", _to_string(variables, f; include_constant = true), ")")
+    return
+end
+
 function _write_expression(io::IO, ::Set, variables::Dict, f)
     print(io, _to_string(variables, f; include_constant = true))
     return
