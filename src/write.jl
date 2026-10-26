@@ -115,7 +115,7 @@ function _to_string(
     if include_constant
         ret *= " + $(f.constant)"
     end
-    return ret
+    return isempty(ret) ? "0" : ret
 end
 
 function _to_string(
@@ -146,7 +146,7 @@ function _to_string(
     if include_constant
         ret *= " + $(f.constant)"
     end
-    return ret
+    return isempty(ret) ? "0" : ret
 end
 
 function _write_constraint(

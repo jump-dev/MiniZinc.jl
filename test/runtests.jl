@@ -295,6 +295,40 @@ function test_write_linear_eq_reified()
     return
 end
 
+function test_write_constant_function()
+    for f in (
+        MOI.ScalarAffineFunction(MOI.ScalarAffineTerm{Int}[], 1),
+        MOI.ScalarQuadraticFunction(
+            MOI.ScalarQuadraticTerm{Int}[],
+            MOI.ScalarAffineTerm{Int}[],
+            1,
+        ),
+    )
+        model = MiniZinc.Model{Int}()
+        MOI.add_constraint(model, f, MOI.LessThan(0))
+        @test sprint(write, model) == """
+        constraint 0 <= -1;
+        solve satisfy;
+        """
+    end
+    return
+end
+
+function test_write_constant_function_reified()
+    model = MiniZinc.Model{Int}()
+    z, _ = MOI.add_constrained_variable(model, MOI.ZeroOne())
+    MOI.set(model, MOI.VariableName(), z, "z")
+    g = MOI.ScalarAffineFunction(MOI.ScalarAffineTerm{Int}[], 1)
+    f = MOI.Utilities.operate(vcat, Int, z, g)
+    MOI.add_constraint(model, f, MOI.Reified(MOI.LessThan(0)))
+    @test sprint(write, model) == """
+    var bool: z;
+    constraint z <-> 0 <= -1;
+    solve satisfy;
+    """
+    return
+end
+
 function test_write_linear_lt()
     model = MiniZinc.Model{Int}()
     x, _ = MOI.add_constrained_variable(model, MOI.Integer())
@@ -1232,6 +1266,32 @@ function test_moi_var_domain_infeasible_fzn()
     @test MOI.get(solver, MOI.TerminationStatus()) === MOI.INFEASIBLE
     @test MOI.get(solver, MOI.ResultCount()) == 0
     @test MOI.get(solver, MOI.RawStatusString()) == "UNSATISFIABLE"
+    return
+end
+
+function test_moi_constant_function()
+    for (rhs, status) in ((0, MOI.INFEASIBLE), (1, MOI.OPTIMAL))
+        model = MOI.Utilities.Model{Int}()
+        MOI.add_constrained_variable(model, MOI.Integer())
+        f = MOI.ScalarAffineFunction(MOI.ScalarAffineTerm{Int}[], 1)
+        MOI.add_constraint(model, f, MOI.LessThan(rhs))
+        solver = MiniZinc.Optimizer{Int}("chuffed")
+        MOI.optimize!(solver, model)
+        @test MOI.get(solver, MOI.TerminationStatus()) === status
+    end
+    return
+end
+
+function test_moi_constant_function_reified()
+    model = MiniZinc.Model{Int}()
+    z, _ = MOI.add_constrained_variable(model, MOI.ZeroOne())
+    g = MOI.ScalarAffineFunction(MOI.ScalarAffineTerm{Int}[], 1)
+    f = MOI.Utilities.operate(vcat, Int, z, g)
+    MOI.add_constraint(model, f, MOI.Reified(MOI.LessThan(0)))
+    solver = MiniZinc.Optimizer{Int}("chuffed")
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(solver, MOI.VariablePrimal(), index_map[z]) == 0
     return
 end
 
