@@ -406,10 +406,7 @@ end
 MOI.get(model::Optimizer, ::MOI.SolveTimeSec) = model.solve_time_sec
 
 function MOI.get(model::Optimizer{T}, attr::MOI.ObjectiveBound) where {T}
-    if model.solver_status == "OPTIMAL"
-        # completed the search, so the bound is the objective value
-        return MOI.get(model, MOI.ObjectiveValue())
-    elseif model.objective_bound !== nothing
+    if model.objective_bound !== nothing
         # throws an InexactError if the bound is not representable in T
         return convert(T, model.objective_bound)
     end

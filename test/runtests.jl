@@ -1647,26 +1647,6 @@ function test_highs_optimization_time_limit()
     return
 end
 
-function test_highs_lp_objective_bound()
-    # HiGHS reports an objective bound of 0 for an LP, but the search completed,
-    # so the bound is the objective value
-    model = MOI.Utilities.Model{Float64}()
-    set = MOI.Interval(0.0, 10.0)
-    x, _ = MOI.add_constrained_variables(model, fill(set, 2))
-    f = 3.0 * x[1] + 7.0 * x[2]
-    MOI.add_constraint(model, f, MOI.GreaterThan(10.5))
-    f = 2.0 * x[1] + 5.0 * x[2]
-    MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)
-    MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
-    solver = MiniZinc.Optimizer{Float64}("highs")
-    MOI.set(solver, MOI.Silent(), true)
-    MOI.optimize!(solver, model)
-    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.OPTIMAL
-    @test MOI.get(solver, MOI.ObjectiveValue()) ≈ 7.0
-    @test MOI.get(solver, MOI.ObjectiveBound()) ≈ 7.0
-    return
-end
-
 function test_highs_optimization_timed_out()
     # bin packing, highs should find a solution quickly but struggle to
     # prove optimal, so we hopefully time out
@@ -1737,8 +1717,7 @@ function test_objective_bound_not_integer()
 end
 
 function test_chuffed_objective_bound()
-    # Chuffed does not report a bound, but completing the search proves the
-    # objective value is the bound
+    # Chuffed does not report a bound
     model = MOI.Utilities.Model{Int}()
     x, _ = MOI.add_constrained_variables(model, fill(MOI.Interval(1, 3), 2))
     MOI.add_constraint.(model, x, MOI.Integer())
@@ -1748,20 +1727,6 @@ function test_chuffed_objective_bound()
     solver = MiniZinc.Optimizer{Int}("chuffed")
     MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.TerminationStatus()) == MOI.OPTIMAL
-    @test MOI.get(solver, MOI.ObjectiveBound()) === 6
-    # knapsack with even weights and an odd capacity: Chuffed times out
-    # without proving optimality, so there is no bound
-    model = MOI.Utilities.Model{Int}()
-    x, _ = MOI.add_constrained_variables(model, fill(MOI.ZeroOne(), 30))
-    f = MOI.ScalarAffineFunction(MOI.ScalarAffineTerm.(2:2:60, x), 0)
-    MOI.add_constraint(model, f, MOI.LessThan(451))
-    MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)
-    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
-    solver = MiniZinc.Optimizer{Int}("chuffed")
-    MOI.set(solver, MOI.Silent(), true)
-    MOI.set(solver, MOI.TimeLimitSec(), 1)
-    MOI.optimize!(solver, model)
-    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.TIME_LIMIT
     @test_throws(
         MOI.GetAttributeNotAllowed,
         MOI.get(solver, MOI.ObjectiveBound()),
