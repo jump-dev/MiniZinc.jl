@@ -441,7 +441,7 @@ function test_write_minimize_linear()
     @test sprint(write, model) == """
     var int: x;
     var int: y;
-    solve minimize 1*x + 2*y + 4;
+    solve minimize (1*x + 2*y + 4);
     """
     return
 end
@@ -458,7 +458,7 @@ function test_write_maximize_linear()
     @test sprint(write, model) == """
     var int: x;
     var int: y;
-    solve maximize 1*x + 2*y + 4;
+    solve maximize (1*x + 2*y + 4);
     """
     return
 end
@@ -475,7 +475,7 @@ function test_write_quadratic_objective()
     @test sprint(write, model) == """
     var int: x;
     var int: y;
-    solve minimize 1*x*x + 2*x*y + 1*y + 4;
+    solve minimize (1*x*x + 2*x*y + 1*y + 4);
     """
     return
 end
@@ -494,6 +494,31 @@ function test_write_nonlinear_objective()
     var int: x;
     var int: y;
     solve minimize (abs(x) * y);
+    """
+    return
+end
+
+function test_write_nonlinear_affine_argument()
+    model = MiniZinc.Model{Int}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), x, "x")
+    y, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), y, "y")
+    z, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), z, "z")
+    xy = MOI.Utilities.operate(*, Int, x, y)
+    f = MOI.ScalarNonlinearFunction(:*, Any[xy, z])
+    MOI.add_constraint(model, f, MOI.LessThan(6))
+    x_plus_1 = 1 * x + 1
+    g = MOI.ScalarNonlinearFunction(:-, Any[z, x_plus_1])
+    MOI.add_constraint(model, g, MOI.GreaterThan(0))
+    @test sprint(write, model) == """
+    var int: x;
+    var int: y;
+    var int: z;
+    constraint (z - (1*x + 1)) >= 0;
+    constraint ((1*x*y + 0) * z) <= 6;
+    solve satisfy;
     """
     return
 end
@@ -1647,6 +1672,41 @@ function test_model_nonlinear_alldifferent_reified()
         "include \"alldifferent.mzn\";\n",
     )
     rm("test.mzn")
+    return
+end
+
+function test_model_nonlinear_affine_argument()
+    for (f, set, obj) in [
+        (
+            x -> MOI.ScalarNonlinearFunction(
+                :*,
+                Any[MOI.Utilities.operate(*, Int, x[1], x[2]), x[3]],
+            ),
+            MOI.LessThan(4),
+            5,
+        ),
+        (
+            x -> MOI.ScalarNonlinearFunction(
+                :-,
+                Any[x[3], MOI.Utilities.operate(+, Int, x[1], x[2])],
+            ),
+            MOI.GreaterThan(0),
+            4,
+        ),
+    ]
+        model = MOI.Utilities.Model{Int}()
+        x = MOI.add_variables(model, 3)
+        MOI.add_constraint.(model, x, MOI.Interval(0, 2))
+        MOI.add_constraint.(model, x, MOI.Integer())
+        MOI.add_constraint(model, f(x), set)
+        MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+        g = 1 * x[1] + 1 * x[2] + 1 * x[3]
+        MOI.set(model, MOI.ObjectiveFunction{typeof(g)}(), g)
+        solver = MiniZinc.Optimizer{Int}("chuffed")
+        MOI.optimize!(solver, model)
+        @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+        @test MOI.get(solver, MOI.ObjectiveValue()) == obj
+    end
     return
 end
 
