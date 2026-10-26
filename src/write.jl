@@ -565,10 +565,68 @@ function _write_annotated_constraint(
     return
 end
 
+# MiniZinc's reserved words, from libminizinc's lexer and `Printer::quoteId`
+const _RESERVED_WORDS = Set([
+    "ann",
+    "annotation",
+    "any",
+    "array",
+    "bool",
+    "case",
+    "constraint",
+    "default",
+    "diff",
+    "div",
+    "else",
+    "elseif",
+    "endif",
+    "enum",
+    "false",
+    "float",
+    "function",
+    "if",
+    "in",
+    "include",
+    "infinity",
+    "int",
+    "intersect",
+    "let",
+    "list",
+    "maximize",
+    "minimize",
+    "mod",
+    "not",
+    "of",
+    "op",
+    "opt",
+    "output",
+    "par",
+    "predicate",
+    "record",
+    "satisfy",
+    "set",
+    "solve",
+    "string",
+    "subset",
+    "superset",
+    "symdiff",
+    "test",
+    "then",
+    "true",
+    "tuple",
+    "type",
+    "union",
+    "var",
+    "variant_record",
+    "where",
+    "xor",
+])
+
 function Base.write(io::IO, model::Model{T}) where {T}
     rs = [
         s -> match(r"^[^a-zA-Z]", s) !== nothing ? "x" * s : s,
         s -> replace(s, r"[^A-Za-z0-9_]" => "_"),
+        s -> s in _RESERVED_WORDS ? "x" * s : s,
     ]
     MOI.FileFormats.create_unique_variable_names(model, false, rs)
     variables = _write_variables(io, model)

@@ -1123,6 +1123,38 @@ function test_write_bool_and_false()
     return
 end
 
+function test_write_reserved_name()
+    model = MiniZinc.Model{Int}()
+    x, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), x, "set")
+    y, _ = MOI.add_constrained_variable(model, MOI.Integer())
+    MOI.set(model, MOI.VariableName(), y, "op")
+    MOI.add_constraint(model, 1 * x + 2 * y, MOI.EqualTo(3))
+    @test sprint(write, model) == """
+    var int: xset;
+    var int: xop;
+    constraint 1*xset + 2*xop = 3;
+    solve satisfy;
+    """
+    return
+end
+
+function test_reserved_name()
+    model = MOI.Utilities.Model{Int}()
+    x = MOI.add_variables(model, 2)
+    MOI.set(model, MOI.VariableName(), x[1], "set")
+    MOI.set(model, MOI.VariableName(), x[2], "op")
+    MOI.add_constraint.(model, x, MOI.Interval(1, 2))
+    MOI.add_constraint.(model, x, MOI.Integer())
+    MOI.add_constraint(model, 1 * x[1] + 2 * x[2], MOI.EqualTo(5))
+    solver = MiniZinc.Optimizer{Int}("chuffed")
+    index_map, _ = MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(solver, MOI.VariablePrimal(), index_map[x[1]]) == 1
+    @test MOI.get(solver, MOI.VariablePrimal(), index_map[x[2]]) == 2
+    return
+end
+
 function _test_chuffed_asset(file, args...)
     filename = joinpath(@__DIR__, "assets", file)
     ret = MiniZinc.run_flatzinc(Chuffed_jll.fznchuffed, filename, args...)
