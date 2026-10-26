@@ -2974,6 +2974,128 @@ function test_compute_conflict_feasible()
     return
 end
 
+function test_scalar_function_in_interval()
+    for (f, set, x_sol) in [
+        (x -> 2 * x[1] + 1 * x[2], MOI.Interval(-1, 1), 2),
+        (x -> MOI.Utilities.operate(*, Int, x[1], x[2]), MOI.Interval(4, 5), 2),
+        (
+            x -> MOI.ScalarNonlinearFunction(:abs, Any[x[1]]),
+            MOI.Interval(1, 1),
+            1,
+        ),
+    ]
+        model = MOI.instantiate(
+            () -> MiniZinc.Optimizer{Int}("chuffed");
+            with_cache_type = Int,
+            with_bridge_type = Int,
+        )
+        x, _ =
+            MOI.add_constrained_variables(model, fill(MOI.Interval(-3, 3), 2))
+        MOI.add_constraint.(model, x, MOI.Integer())
+        MOI.add_constraint(model, f(x), set)
+        MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+        MOI.set(model, MOI.ObjectiveFunction{MOI.VariableIndex}(), x[1])
+        MOI.optimize!(model)
+        @test MOI.get(model, MOI.TerminationStatus()) === MOI.OPTIMAL
+        @test MOI.get(model, MOI.VariablePrimal(), x[1]) == x_sol
+    end
+    return
+end
+
+function test_vector_of_variables_in_reified()
+    for (set, z_sol) in
+        [(MOI.LessThan(1), 0), (MOI.GreaterThan(2), 1), (MOI.EqualTo(2), 1)]
+        model = MOI.instantiate(
+            () -> MiniZinc.Optimizer{Int}("chuffed");
+            with_cache_type = Int,
+            with_bridge_type = Int,
+        )
+        z, _ = MOI.add_constrained_variable(model, MOI.ZeroOne())
+        x, _ = MOI.add_constrained_variable(model, MOI.Interval(2, 2))
+        MOI.add_constraint(model, x, MOI.Integer())
+        MOI.add_constraint(
+            model,
+            MOI.VectorOfVariables([z, x]),
+            MOI.Reified(set),
+        )
+        MOI.optimize!(model)
+        @test MOI.get(model, MOI.TerminationStatus()) === MOI.OPTIMAL
+        @test MOI.get(model, MOI.VariablePrimal(), z) == z_sol
+    end
+    return
+end
+
+function test_scalar_function_in_zero_one()
+    model = MOI.instantiate(
+        () -> MiniZinc.Optimizer{Int}("chuffed");
+        with_cache_type = Int,
+        with_bridge_type = Int,
+    )
+    x, _ = MOI.add_constrained_variables(model, fill(MOI.Interval(0, 3), 2))
+    MOI.add_constraint.(model, x, MOI.Integer())
+    f = 1 * x[1] + 1 * x[2]
+    MOI.add_constraint(model, f, MOI.ZeroOne())
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)
+    MOI.optimize!(model)
+    @test MOI.get(model, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(model, MOI.ObjectiveValue()) == 1
+    return
+end
+
+function test_scalar_function_in_integer()
+    model = MOI.instantiate(
+        () -> MiniZinc.Optimizer{Float64}("highs");
+        with_cache_type = Float64,
+        with_bridge_type = Float64,
+    )
+    x, _ = MOI.add_constrained_variables(model, fill(MOI.Interval(0.0, 1.5), 2))
+    f = 0.5 * x[1] + 0.5 * x[2]
+    MOI.add_constraint(model, f, MOI.Integer())
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)
+    MOI.optimize!(model)
+    @test MOI.get(model, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(model, MOI.ObjectiveValue()) ≈ 1.0
+    return
+end
+
+function test_variable_in_semicontinuous_semiinteger()
+    for set in (MOI.Semicontinuous(2, 3), MOI.Semiinteger(2, 3))
+        model = MOI.instantiate(
+            () -> MiniZinc.Optimizer{Int}("chuffed");
+            with_cache_type = Int,
+            with_bridge_type = Int,
+        )
+        x, _ = MOI.add_constrained_variable(model, set)
+        MOI.add_constraint(model, 1 * x, MOI.LessThan(1))
+        MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+        MOI.set(model, MOI.ObjectiveFunction{MOI.VariableIndex}(), x)
+        MOI.optimize!(model)
+        @test MOI.get(model, MOI.TerminationStatus()) === MOI.OPTIMAL
+        @test MOI.get(model, MOI.VariablePrimal(), x) == 0
+    end
+    return
+end
+
+function test_variable_in_parameter()
+    model = MOI.instantiate(
+        () -> MiniZinc.Optimizer{Int}("chuffed");
+        with_cache_type = Int,
+        with_bridge_type = Int,
+    )
+    p, _ = MOI.add_constrained_variable(model, MOI.Parameter(2))
+    y, _ = MOI.add_constrained_variable(model, MOI.Interval(0, 5))
+    MOI.add_constraint(model, y, MOI.Integer())
+    MOI.add_constraint(model, 1 * y - 1 * p, MOI.LessThan(0))
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    MOI.set(model, MOI.ObjectiveFunction{MOI.VariableIndex}(), y)
+    MOI.optimize!(model)
+    @test MOI.get(model, MOI.TerminationStatus()) === MOI.OPTIMAL
+    @test MOI.get(model, MOI.VariablePrimal(), y) == 2
+    return
+end
+
 end  # TestMiniZinc
 
 TestMiniZinc.runtests()
