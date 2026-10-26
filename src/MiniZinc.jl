@@ -68,6 +68,36 @@ function MOI.supports_constraint(
     return false
 end
 
+function MOI.supports_constraint(
+    ::Model{T},
+    ::Type{
+        <:Union{
+            MOI.ScalarAffineFunction{T},
+            MOI.ScalarQuadraticFunction{T},
+            MOI.ScalarNonlinearFunction,
+        },
+    },
+    ::Type{<:Union{MOI.Interval{T},MOI.ZeroOne,MOI.Integer}},
+) where {T}
+    return false
+end
+
+function MOI.supports_constraint(
+    ::Model{T},
+    ::Type{MOI.VectorOfVariables},
+    ::Type{MOI.Reified{S}},
+) where {T,S<:Union{MOI.LessThan{T},MOI.GreaterThan{T},MOI.EqualTo{T}}}
+    return false
+end
+
+function MOI.supports_constraint(
+    ::Model{T},
+    ::Type{MOI.VariableIndex},
+    ::Type{<:Union{MOI.Semicontinuous{T},MOI.Semiinteger{T},MOI.Parameter{T}}},
+) where {T}
+    return false
+end
+
 function MOI.supports(
     ::Model{T},
     ::MOI.ObjectiveFunction{F},
