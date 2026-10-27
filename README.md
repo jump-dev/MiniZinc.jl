@@ -187,6 +187,7 @@ List of supported model attributes:
  * [`MOI.ConflictStatus()`](@ref)
  * [`MOI.NLPBlock()`](@ref)
  * [`MOI.Name()`](@ref)
+ * [`MOI.ObjectiveBound()`](@ref)
  * [`MOI.ObjectiveSense()`](@ref)
 
 List of supported constraint attributes:

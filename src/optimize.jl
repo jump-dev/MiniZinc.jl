@@ -32,6 +32,7 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
     cmd_flags::String
     time_limit_sec::Union{Nothing,Float64}
     solve_time_sec::Float64
+    objective_bound::Union{Nothing,Float64}
     # Conflict (IIS) state, populated by `compute_conflict!`. `conflict_status`
     # tracks whether a conflict computation ran and its outcome;
     # `conflict_constraints` holds the inner `ConstraintIndex`es that findMUS
@@ -59,6 +60,7 @@ mutable struct Optimizer{T} <: MOI.AbstractOptimizer
             "",
             nothing,
             NaN,
+            nothing,
             MOI.COMPUTE_CONFLICT_NOT_CALLED,
             Set{MOI.ConstraintIndex}(),
         )
@@ -98,6 +100,8 @@ function _run_minizinc(dest::Optimizer)
     try
         _minizinc_exe() do exe
             cmd = `$(exe) --solver $(dest.solver) --output-objective -o $(output) $(filename)`
+            # `-s` makes solvers report statistics, such as the objective bound
+            cmd = `$cmd -s`
             if dest.time_limit_sec !== nothing
                 limit = round(Int, 1_000 * dest.time_limit_sec::Float64)
                 cmd = `$cmd --time-limit $limit`
@@ -159,6 +163,7 @@ function MOI.empty!(model::Optimizer{T}) where {T}
     empty!(model.primal_objectives)
     empty!(model.primal_solutions)
     model.solve_time_sec = NaN
+    model.objective_bound = nothing
     model.conflict_status = MOI.COMPUTE_CONFLICT_NOT_CALLED
     empty!(model.conflict_constraints)
     return
@@ -348,6 +353,21 @@ function _parse_solutions!(
     return
 end
 
+function _parse_objective_bound(ret::String)
+    # solvers that determine a bound report it as an `objectiveBound` statistic
+    # with each solution. keep the last finite one that parsed successfully,
+    # which should be the tightest. the statistic can be a float, see
+    # https://docs.minizinc.dev/en/stable/fzn-spec.html#statistics-output
+    bound = nothing
+    for m in eachmatch(r"^%%%mzn-stat: objectiveBound=(.+?)\r?$"m, ret)
+        value = tryparse(Float64, m[1])
+        if value !== nothing && isfinite(value)
+            bound = value
+        end
+    end
+    return bound
+end
+
 function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     time_start = time()
     MOI.empty!(dest.inner)
@@ -358,6 +378,7 @@ function MOI.optimize!(dest::Optimizer{T}, src::MOI.ModelLike) where {T}
     empty!(dest.conflict_constraints)
     index_map = MOI.copy_to(dest.inner, src)
     ret = _run_minizinc(dest)
+    dest.objective_bound = _parse_objective_bound(ret)
     if !isempty(ret)
         dest.solver_status = _parse_status(ret)
         if dest.solver_status in ("SATISFIABLE", "OPTIMAL")
@@ -451,3 +472,12 @@ function MOI.get(
 end
 
 MOI.get(model::Optimizer, ::MOI.SolveTimeSec) = model.solve_time_sec
+
+function MOI.get(model::Optimizer{T}, attr::MOI.ObjectiveBound) where {T}
+    if model.objective_bound !== nothing
+        # throws an InexactError if the bound is not representable in T
+        return convert(T, model.objective_bound)
+    end
+    msg = "the solver did not report an objective bound"
+    return throw(MOI.GetAttributeNotAllowed(attr, msg))
+end

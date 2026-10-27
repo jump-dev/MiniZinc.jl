@@ -1816,6 +1816,7 @@ function test_highs_optimization()
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) == 10.0
     @test MOI.get(solver, MOI.ObjectiveValue()) == 10.0
+    @test MOI.get(solver, MOI.ObjectiveBound()) === 10
     MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
     solver = MiniZinc.Optimizer{Int}("highs")
     index_map, _ = MOI.optimize!(solver, model)
@@ -1823,6 +1824,7 @@ function test_highs_optimization()
     @test MOI.get(solver, MOI.ResultCount()) >= 1
     @test MOI.get(solver, MOI.VariablePrimal(), index_map[x]) == 1.0
     @test MOI.get(solver, MOI.ObjectiveValue()) == 1.0
+    @test MOI.get(solver, MOI.ObjectiveBound()) === 1
     @test MOI.get(solver, MOI.RawStatusString()) == "OPTIMAL"
     return
 end
@@ -1883,6 +1885,64 @@ function test_highs_optimization_timed_out()
     MOI.optimize!(solver, model)
     @test MOI.get(solver, MOI.PrimalStatus()) == MOI.FEASIBLE_POINT
     @test MOI.get(solver, MOI.TerminationStatus()) == MOI.TIME_LIMIT
+    # the search did not complete, so the bound is reported by highs. 
+    # it should be at least the LP relaxation bound,
+    # and strictly less than the objective value (assumed we timed out above)
+    bound = MOI.get(solver, MOI.ObjectiveBound())
+    @test sum(w) / 100 <= bound < MOI.get(solver, MOI.ObjectiveValue())
+    return
+end
+
+function test_parse_objective_bound()
+    # statistics reported by CP-SAT with `-s`
+    ret = """
+    %%%mzn-stat: objective=76
+    %%%mzn-stat: objectiveBound=31
+    %%%mzn-stat-end
+    _objective = 76;
+    ----------
+    %%%mzn-stat: objective=74
+    %%%mzn-stat: objectiveBound=33
+    %%%mzn-stat-end
+    _objective = 74;
+    ----------
+    """
+    @test MiniZinc._parse_objective_bound(ret) === 33.0
+    @test MiniZinc._parse_objective_bound("_objective = 74;\n") === nothing
+    # an infinite bound is no bound, as reported by HiGHS before it has one
+    ret = "%%%mzn-stat: objectiveBound=-infinity\n"
+    @test MiniZinc._parse_objective_bound(ret) === nothing
+    # the bound is reported as is, without rounding
+    ret = "%%%mzn-stat: objectiveBound=20.5\n"
+    @test MiniZinc._parse_objective_bound(ret) === 20.5
+    return
+end
+
+function test_objective_bound_not_integer()
+    # a non-integer bound cannot be converted for an integer model
+    model = MiniZinc.Optimizer{Int}("highs")
+    model.objective_bound = 20.5
+    @test_throws InexactError MOI.get(model, MOI.ObjectiveBound())
+    model.objective_bound = 21.0
+    @test MOI.get(model, MOI.ObjectiveBound()) === 21
+    return
+end
+
+function test_chuffed_objective_bound()
+    # Chuffed does not report a bound
+    model = MOI.Utilities.Model{Int}()
+    x, _ = MOI.add_constrained_variables(model, fill(MOI.Interval(1, 3), 2))
+    MOI.add_constraint.(model, x, MOI.Integer())
+    f = 1 * x[1] + x[2]
+    MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    solver = MiniZinc.Optimizer{Int}("chuffed")
+    MOI.optimize!(solver, model)
+    @test MOI.get(solver, MOI.TerminationStatus()) == MOI.OPTIMAL
+    @test_throws(
+        MOI.GetAttributeNotAllowed,
+        MOI.get(solver, MOI.ObjectiveBound()),
+    )
     return
 end
 
